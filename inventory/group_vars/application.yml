@@ -1,0 +1,26 @@
+app_config_dir: /opt/app
+otel_dir: /opt/otel
+app_log_dir: /var/log/app
+
+app_frontend_port: 80
+app_backend_port: 8080
+app_db_port: 3306
+
+spring_profile: "int"
+app_port: 8080
+
+mysql_database: "app-db"
+mysql_user: "appuser"
+mysql_password: "123456789"
+mysql_root_password: "123456789"
+
+otel_agent_version: "2.25.0"
+otel_agent_jar: "/opt/otel/opentelemetry-javaagent.jar"
+otel_service_name: "react-springboot-app"
+otel_exporter_endpoint: "http://192.168.127.10:4317"
+
+promtail_port: 9080
+app_log_path: "/var/log/app/*.log"
+
+mysql_exporter_port: 9104
+mysql_exporter_version: "0.16.0"

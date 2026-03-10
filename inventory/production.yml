@@ -1,0 +1,25 @@
+all:
+  children:
+    monitoring:
+      hosts:
+        monitoring-vm:
+          ansible_host: 192.168.127.10
+          ansible_user: deploy
+    application:
+      hosts:
+        application-vm:
+          ansible_host: 192.168.127.30
+          ansible_user: deploy
+          app_port: 8080
+    network:
+      hosts:
+        network-vm:
+          ansible_host: 192.168.127.15
+          ansible_user: deploy
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_private_key_file: ~/.ssh/ansible_key
+    timezone: "Africa/Casablanca"
+    ntp_servers:
+      - 0.ma.pool.ntp.org
+      - 1.ma.pool.ntp.org

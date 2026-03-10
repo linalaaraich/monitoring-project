@@ -1,0 +1,23 @@
+---
+- name: Create Loki config directory
+  file:
+    path: "{{ loki_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Loki data directory
+  file:
+    path: "{{ loki_data_dir }}"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: "0755"
+
+- name: Deploy Loki configuration
+  template:
+    src: loki-config.yml.j2
+    dest: "{{ loki_config_dir }}/loki-config.yml"
+    mode: "0644"
+  notify: restart stack

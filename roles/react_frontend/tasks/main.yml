@@ -1,0 +1,6 @@
+---
+# React frontend runs as a Docker container defined in the unified compose.
+# No additional config files are needed — the image is pre-built.
+- name: Ensure react_frontend role is included
+  debug:
+    msg: "React frontend will be started as part of the unified stack"

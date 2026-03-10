@@ -1,0 +1,49 @@
+---
+- name: Create Grafana directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "472"
+    group: "472"
+    mode: "0755"
+  loop:
+    - "{{ grafana_config_dir }}"
+    - "{{ grafana_data_dir }}"
+    - "{{ grafana_provisioning_dir }}"
+    - "{{ grafana_provisioning_dir }}/datasources"
+    - "{{ grafana_provisioning_dir }}/dashboards"
+
+- name: Deploy Grafana datasource provisioning
+  template:
+    src: datasources.yml.j2
+    dest: "{{ grafana_provisioning_dir }}/datasources/datasources.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  notify: restart stack
+
+- name: Deploy Grafana dashboard provisioning config
+  template:
+    src: dashboard-provider.yml.j2
+    dest: "{{ grafana_provisioning_dir }}/dashboards/provider.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  notify: restart stack
+
+- name: Create Grafana dashboards directory
+  file:
+    path: "{{ grafana_data_dir }}/dashboards"
+    state: directory
+    owner: "472"
+    group: "472"
+    mode: "0755"
+
+- name: Deploy Grafana dashboards
+  copy:
+    src: "dashboards/"
+    dest: "{{ grafana_data_dir }}/dashboards/"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  notify: restart stack

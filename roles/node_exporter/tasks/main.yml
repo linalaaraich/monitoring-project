@@ -1,0 +1,6 @@
+---
+# node_exporter container is defined in the unified per-VM docker-compose.
+# This role is a placeholder for any future node_exporter-specific config.
+- name: Ensure node_exporter role is included
+  debug:
+    msg: "node_exporter will be started as part of the unified stack"

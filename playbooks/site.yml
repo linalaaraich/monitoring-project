@@ -1,0 +1,10 @@
+---
+# Master playbook — deploys full observability stack across all VMs
+# Usage: ansible-playbook playbooks/site.yml
+# Per-group: ansible-playbook playbooks/monitoring.yml
+#            ansible-playbook playbooks/application.yml
+#            ansible-playbook playbooks/network.yml
+
+- import_playbook: monitoring.yml
+- import_playbook: application.yml
+- import_playbook: network.yml

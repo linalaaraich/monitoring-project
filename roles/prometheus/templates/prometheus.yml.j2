@@ -1,0 +1,18 @@
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}
+  evaluation_interval: {{ prometheus_scrape_interval }}
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+scrape_configs:
+{% for target in prometheus_targets %}
+  - job_name: '{{ target.job }}'
+{% if target.job == 'app-spring-actuator' %}
+    metrics_path: '/actuator/prometheus'
+{% elif target.job == 'net-kong' %}
+    metrics_path: '/metrics'
+{% endif %}
+    static_configs:
+      - targets: ['{{ target.host }}:{{ target.port }}']
+{% endfor %}

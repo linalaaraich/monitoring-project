@@ -1,0 +1,46 @@
+---
+- name: Common setup for application hosts
+  hosts: application
+  roles:
+    - common
+    - docker
+    - node_exporter
+    - cadvisor
+  tags: [common, docker]
+
+- name: Deploy application stack
+  hosts: application
+  roles:
+    - mysql
+    - spring_backend
+    - promtail
+  tags: [application]
+  tasks:
+    - name: Create stack directory
+      file:
+        path: "{{ stack_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy unified application docker-compose
+      template:
+        src: "{{ playbook_dir }}/templates/application-compose.yml.j2"
+        dest: "{{ stack_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Build application image
+      community.docker.docker_compose_v2:
+        project_src: "{{ stack_dir }}"
+        build: always
+        state: present
+      register: app_stack_result
+
+    - name: Wait for Spring Boot
+      uri:
+        url: "http://localhost:{{ app_backend_port }}/actuator/health"
+        status_code: 200
+      retries: 30
+      delay: 10
+      until: app_health.status == 200
+      register: app_health
+      ignore_errors: yes

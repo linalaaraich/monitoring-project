@@ -1,0 +1,15 @@
+---
+- name: Create OTel Collector config directory
+  file:
+    path: "{{ otel_collector_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy OTel Collector configuration
+  template:
+    src: otel-collector-config.yaml.j2
+    dest: "{{ otel_collector_config_dir }}/config.yaml"
+    mode: "0644"
+  notify: restart stack

@@ -1,0 +1,25 @@
+stack_dir: /opt/stack
+admin_email: laaraichlina@gmail.com
+ssh_port: 22
+
+firewall_enabled: true
+ansible_control_ip: 192.168.127.20
+
+common_packages:
+  - curl
+  - wget
+  - vim
+  - htop
+  - net-tools
+  - jq
+  - unzip
+  - ca-certificates
+  - gnupg
+
+docker_compose_version: "5.0.1"
+
+cadvisor_port: 8081
+node_port: 9100
+loki_push_endpoint: "http://192.168.127.10:3100/loki/api/v1/push"
+jaeger_endpoint: "http://192.168.127.10:4317"
+prometheus_host: "192.168.127.10"

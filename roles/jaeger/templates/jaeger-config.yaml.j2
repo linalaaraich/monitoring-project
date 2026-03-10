@@ -1,0 +1,39 @@
+service:
+  extensions: [jaeger_storage, jaeger_query]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+
+extensions:
+  jaeger_storage:
+    backends:
+      badger_main:
+        badger:
+          directories:
+            keys: /data/badger/keys
+            values: /data/badger/values
+          ephemeral: false
+          maintenance_interval: {{ jaeger_maintenance_interval }}
+
+  jaeger_query:
+    storage:
+      traces: badger_main
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:{{ jaeger_otlp_grpc_port }}"
+      http:
+        endpoint: "0.0.0.0:{{ jaeger_otlp_http_port }}"
+
+processors:
+  batch:
+    send_batch_size: {{ jaeger_batch_size }}
+    timeout: {{ jaeger_batch_timeout }}
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: badger_main

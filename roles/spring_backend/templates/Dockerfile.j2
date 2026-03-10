@@ -1,0 +1,15 @@
+# Multi-stage build for mukundmadhav/react-springboot-mysql
+# Stage 1: Build the Spring Boot JAR (includes bundled React frontend)
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /build
+RUN git clone https://github.com/mukundmadhav/react-springboot-mysql.git .
+RUN mvn clean package -DskipTests
+
+# Stage 2: Runtime image with OTel agent support
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY --from=builder /build/target/springboot-0.0.1-SNAPSHOT.jar app.jar
+
+# OTel Java agent will be mounted at runtime via volume
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

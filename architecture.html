@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Observability Platform — Architecture</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e0e0e0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+    --flow-metrics: #4ea8de;
+    --flow-logs: #6bcf7f;
+    --flow-traces: #f0a050;
+    --flow-traffic: #8890a0;
+    --flow-viz: #b07ee8;
+    --embedded-bg: rgba(255,255,255,0.04);
+    --embedded-border: rgba(255,255,255,0.12);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+
+  /* Tabs */
+  .tabs { display:flex; border-bottom:2px solid var(--border); padding: 0 24px; background: #13151e; }
+  .tab { padding:14px 28px; cursor:pointer; font-size:14px; font-weight:600; color:var(--muted);
+         border-bottom:3px solid transparent; margin-bottom:-2px; transition: all .2s; letter-spacing:.3px; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  /* Diagram tab */
+  .diagram-wrapper { padding:32px; overflow-x:auto; }
+  .diagram-canvas { position:relative; min-width:1200px; margin:0 auto; }
+
+  /* VM Boxes */
+  .vm-box {
+    border:2px solid var(--border); border-radius:14px; background: var(--card);
+    padding:0; overflow:hidden; position:relative;
+  }
+  .vm-header {
+    padding:14px 20px; font-weight:700; font-size:15px; display:flex;
+    align-items:center; justify-content:space-between; border-bottom:1px solid var(--border);
+  }
+  .vm-header .ip { font-weight:400; font-size:12px; color:var(--muted); font-family:monospace; }
+  .vm-body { padding:16px; display:flex; flex-wrap:wrap; gap:10px; }
+
+  /* Container cards */
+  .svc {
+    border:1px solid var(--border); border-radius:8px; padding:10px 14px;
+    min-width:130px; font-size:13px; background: rgba(255,255,255,0.03);
+    transition: transform .15s, box-shadow .15s; position:relative;
+  }
+  .svc:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.4); }
+  .svc .svc-name { font-weight:600; margin-bottom:3px; white-space:nowrap; }
+  .svc .svc-port { font-size:11px; color:var(--muted); font-family:monospace; }
+  .svc .svc-badge { font-size:10px; padding:2px 6px; border-radius:4px; margin-top:4px; display:inline-block; font-weight:600; }
+
+  /* Embedded / sub-service (inside another container) */
+  .embedded {
+    border:1px dashed var(--embedded-border); border-radius:6px; padding:6px 10px;
+    background: var(--embedded-bg); font-size:11px; margin-top:6px;
+  }
+  .embedded .emb-icon { display:inline-block; width:8px; height:8px; border-radius:50%;
+    margin-right:5px; vertical-align:middle; }
+  .embedded .emb-name { font-weight:600; font-size:11px; }
+  .embedded .emb-detail { font-size:10px; color:var(--muted); margin-top:2px; }
+
+  /* Color coding per pillar */
+  .pillar-metrics { border-color: var(--accent-blue); }
+  .pillar-metrics .svc-name { color: var(--accent-blue); }
+  .pillar-logs { border-color: var(--accent-green); }
+  .pillar-logs .svc-name { color: var(--accent-green); }
+  .pillar-traces { border-color: var(--accent-orange); }
+  .pillar-traces .svc-name { color: var(--accent-orange); }
+  .pillar-viz { border-color: var(--accent-purple); }
+  .pillar-viz .svc-name { color: var(--accent-purple); }
+  .pillar-app { border-color: var(--accent-cyan); }
+  .pillar-app .svc-name { color: var(--accent-cyan); }
+  .pillar-infra { border-color: var(--border); }
+  .pillar-infra .svc-name { color: var(--muted); }
+  .pillar-gateway { border-color: var(--accent-yellow); }
+  .pillar-gateway .svc-name { color: var(--accent-yellow); }
+
+  /* VM accent strips */
+  .vm-monitoring .vm-header { background: linear-gradient(90deg, rgba(78,168,222,.15), rgba(176,126,232,.08)); }
+  .vm-application .vm-header { background: linear-gradient(90deg, rgba(64,208,208,.12), rgba(107,207,127,.08)); }
+  .vm-network .vm-header { background: linear-gradient(90deg, rgba(224,208,96,.12), rgba(240,160,80,.08)); }
+
+  /* Layout */
+  .grid-3vm {
+    display:grid; grid-template-columns: 1fr 1fr;
+    gap:24px; margin-bottom:24px;
+  }
+  .vm-full { grid-column: 1 / -1; }
+
+  /* SVG overlay for arrows */
+  svg.flows {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    pointer-events:none; z-index:10;
+  }
+
+  /* Data flow table */
+  .flow-table { width:100%; border-collapse:collapse; margin-top:16px; font-size:13px; }
+  .flow-table th { text-align:left; padding:10px 14px; border-bottom:2px solid var(--border); color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.5px; }
+  .flow-table td { padding:10px 14px; border-bottom:1px solid var(--border); }
+  .flow-type { padding:3px 8px; border-radius:4px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+  .flow-type.metrics { background:rgba(78,168,222,.15); color:var(--flow-metrics); }
+  .flow-type.logs { background:rgba(107,207,127,.15); color:var(--flow-logs); }
+  .flow-type.traces { background:rgba(240,160,80,.15); color:var(--flow-traces); }
+  .flow-type.visualization { background:rgba(176,126,232,.15); color:var(--flow-viz); }
+  .flow-type.user-traffic { background:rgba(136,144,160,.15); color:var(--flow-traffic); }
+
+  /* JSON tab */
+  .json-wrapper { padding:32px; }
+  pre.json-block {
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:24px; font-size:12.5px; line-height:1.6; overflow-x:auto;
+    font-family:'JetBrains Mono','Fira Code',monospace; color:#c0c8d8; max-height:80vh;
+  }
+
+  /* Legend */
+  .legend { display:flex; flex-wrap:wrap; gap:16px; padding:16px 0; margin-bottom:16px; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .legend-color { width:14px; height:14px; border-radius:3px; }
+  .legend-dashed { width:36px; height:0; border-top:2px dashed var(--embedded-border); }
+
+  /* Title bar */
+  .title-bar { padding:24px 32px 0; }
+  .title-bar h1 { font-size:22px; font-weight:700; }
+  .title-bar p { color:var(--muted); font-size:13px; margin-top:4px; }
+
+  /* Pillar summary cards */
+  .pillar-cards { display:flex; gap:16px; margin-bottom:24px; }
+  .pillar-card { flex:1; border:1px solid var(--border); border-radius:10px; padding:16px; background:var(--card); }
+  .pillar-card h3 { font-size:13px; font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:.5px; }
+  .pillar-card ul { list-style:none; font-size:12px; color:var(--muted); }
+  .pillar-card ul li { padding:2px 0; }
+  .pillar-card ul li::before { content:'→ '; color:var(--muted); }
+  .pillar-card.p-metrics h3 { color:var(--accent-blue); }
+  .pillar-card.p-logs h3 { color:var(--accent-green); }
+  .pillar-card.p-traces h3 { color:var(--accent-orange); }
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <h1>Observability Platform Architecture</h1>
+  <p>CIRES Technologies — Integration Environment &nbsp;|&nbsp; 3 VMs &nbsp;|&nbsp; NAT 192.168.127.0/24</p>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('diagram')">Architecture Diagram</div>
+  <div class="tab" onclick="switchTab('flows')">Data Flows</div>
+  <div class="tab" onclick="switchTab('json')">JSON Schema</div>
+</div>
+
+<!-- ==================== DIAGRAM TAB ==================== -->
+<div id="tab-diagram" class="tab-content active">
+<div class="diagram-wrapper">
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color" style="background:var(--accent-blue)"></div> Metrics</div>
+    <div class="legend-item"><div class="legend-color" style="background:var(--accent-green)"></div> Logs</div>
+    <div class="legend-item"><div class="legend-color" style="background:var(--accent-orange)"></div> Traces</div>
+    <div class="legend-item"><div class="legend-color" style="background:var(--accent-purple)"></div> Visualization</div>
+    <div class="legend-item"><div class="legend-color" style="background:var(--accent-cyan)"></div> Application</div>
+    <div class="legend-item"><div class="legend-color" style="background:var(--accent-yellow)"></div> Gateway</div>
+    <div class="legend-item"><div class="legend-dashed"></div> Embedded component</div>
+  </div>
+
+  <!-- Pillar summary -->
+  <div class="pillar-cards">
+    <div class="pillar-card p-metrics">
+      <h3>Metrics</h3>
+      <ul>
+        <li>Prometheus scrapes all 3 VMs</li>
+        <li>node_exporter, cAdvisor, Kong, MySQL Exporter, Spring Actuator</li>
+        <li>Grafana for visualization</li>
+      </ul>
+    </div>
+    <div class="pillar-card p-logs">
+      <h3>Logs</h3>
+      <ul>
+        <li>Promtail on App VM &amp; Network VM</li>
+        <li>Kong http-log → Loki (direct push)</li>
+        <li>Spring Boot logs → Promtail → Loki</li>
+      </ul>
+    </div>
+    <div class="pillar-card p-traces">
+      <h3>Traces</h3>
+      <ul>
+        <li>OTel Java Agent → OTel Collector :4317</li>
+        <li>Kong OTel plugin → OTel Collector :4317</li>
+        <li>OTel Collector → Jaeger :4327</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid-3vm">
+    <!-- ===== MONITORING VM ===== -->
+    <div class="vm-box vm-monitoring vm-full">
+      <div class="vm-header">
+        <span>Monitoring VM</span>
+        <span class="ip">192.168.127.10</span>
+      </div>
+      <div class="vm-body">
+        <div class="svc pillar-metrics">
+          <div class="svc-name">Prometheus</div>
+          <div class="svc-port">:9090</div>
+          <div class="svc-badge" style="background:rgba(78,168,222,.12);color:var(--accent-blue)">TSDB</div>
+        </div>
+        <div class="svc pillar-logs">
+          <div class="svc-name">Loki</div>
+          <div class="svc-port">:3100</div>
+          <div class="svc-badge" style="background:rgba(107,207,127,.12);color:var(--accent-green)">Log Store</div>
+        </div>
+        <div class="svc pillar-traces">
+          <div class="svc-name">Jaeger</div>
+          <div class="svc-port">:16686 UI &nbsp;|&nbsp; :4327 gRPC &nbsp;|&nbsp; :4328 HTTP</div>
+          <div class="svc-badge" style="background:rgba(240,160,80,.12);color:var(--accent-orange)">Badger</div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-orange)"></span>
+            <span class="emb-detail">Admin/metrics :14269</span>
+          </div>
+        </div>
+        <div class="svc pillar-traces">
+          <div class="svc-name">OTel Collector</div>
+          <div class="svc-port">:4317 gRPC &nbsp;|&nbsp; :4318 HTTP</div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-blue)"></span>
+            <span class="emb-detail">Metrics :8888 &nbsp;|&nbsp; Health :13133</span>
+          </div>
+        </div>
+        <div class="svc pillar-viz">
+          <div class="svc-name">Grafana</div>
+          <div class="svc-port">:3000</div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-purple)"></span>
+            <span class="emb-name">Datasources</span>
+            <div class="emb-detail">Prometheus · Loki · Jaeger</div>
+          </div>
+        </div>
+        <div class="svc pillar-infra">
+          <div class="svc-name">node_exporter</div>
+          <div class="svc-port">:9100</div>
+        </div>
+        <div class="svc pillar-infra">
+          <div class="svc-name">cAdvisor</div>
+          <div class="svc-port">:8081</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== APPLICATION VM ===== -->
+    <div class="vm-box vm-application">
+      <div class="vm-header">
+        <span>Application VM</span>
+        <span class="ip">192.168.127.30</span>
+      </div>
+      <div class="vm-body">
+        <div class="svc pillar-app">
+          <div class="svc-name">React Frontend</div>
+          <div class="svc-port">:80</div>
+        </div>
+        <div class="svc pillar-app">
+          <div class="svc-name">Spring Boot</div>
+          <div class="svc-port">:8080</div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-blue)"></span>
+            <span class="emb-name">Actuator</span>
+            <div class="emb-detail">Metrics on :8080/actuator</div>
+          </div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-orange)"></span>
+            <span class="emb-name">OTel Java Agent</span>
+            <div class="emb-detail">gRPC → OTel Collector :4317</div>
+          </div>
+        </div>
+        <div class="svc pillar-app">
+          <div class="svc-name">MySQL</div>
+          <div class="svc-port">:3306</div>
+        </div>
+        <div class="svc pillar-metrics">
+          <div class="svc-name">MySQL Exporter</div>
+          <div class="svc-port">:9104</div>
+        </div>
+        <div class="svc pillar-logs">
+          <div class="svc-name">Promtail</div>
+          <div class="svc-port">:9080</div>
+        </div>
+        <div class="svc pillar-infra">
+          <div class="svc-name">node_exporter</div>
+          <div class="svc-port">:9100</div>
+        </div>
+        <div class="svc pillar-infra">
+          <div class="svc-name">cAdvisor</div>
+          <div class="svc-port">:8081</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== NETWORK VM ===== -->
+    <div class="vm-box vm-network">
+      <div class="vm-header">
+        <span>Network VM</span>
+        <span class="ip">192.168.127.15</span>
+      </div>
+      <div class="vm-body">
+        <div class="svc pillar-gateway">
+          <div class="svc-name">Kong Gateway</div>
+          <div class="svc-port">:8000 proxy &nbsp;|&nbsp; :8001 admin</div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-blue)"></span>
+            <span class="emb-name">Prometheus Plugin</span>
+            <div class="emb-detail">Metrics via :8001/metrics</div>
+          </div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-orange)"></span>
+            <span class="emb-name">OpenTelemetry Plugin</span>
+            <div class="emb-detail">W3C traces → OTel Collector :4317</div>
+          </div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--accent-green)"></span>
+            <span class="emb-name">http-log Plugin</span>
+            <div class="emb-detail">Logs → Loki :3100</div>
+          </div>
+          <div class="embedded">
+            <span class="emb-icon" style="background:var(--muted)"></span>
+            <span class="emb-name">correlation-id Plugin</span>
+            <div class="emb-detail">X-Correlation-ID header</div>
+          </div>
+        </div>
+        <div class="svc pillar-logs">
+          <div class="svc-name">Promtail</div>
+          <div class="svc-port">:9080</div>
+        </div>
+        <div class="svc pillar-infra">
+          <div class="svc-name">node_exporter</div>
+          <div class="svc-port">:9100</div>
+        </div>
+        <div class="svc pillar-infra">
+          <div class="svc-name">cAdvisor</div>
+          <div class="svc-port">:8081</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data flow arrows (CSS-based) -->
+  <div style="margin-top:8px;">
+    <h3 style="font-size:14px; color:var(--muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:.5px;">Key Data Flows</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
+        <span class="flow-type metrics">METRICS</span>
+        <span>Prometheus <span style="color:var(--muted)">← scrape →</span> all exporters (15s)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
+        <span class="flow-type traces">TRACES</span>
+        <span>OTel Java Agent → OTel Collector :4317 → Jaeger :4327</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
+        <span class="flow-type traces">TRACES</span>
+        <span>Kong OTel Plugin → OTel Collector :4317 → Jaeger :4327</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
+        <span class="flow-type logs">LOGS</span>
+        <span>Kong http-log → Loki :3100 (direct push)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
+        <span class="flow-type logs">LOGS</span>
+        <span>Promtail (App/Net VMs) → Loki :3100</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
+        <span class="flow-type visualization">VIZ</span>
+        <span>Grafana → Prometheus / Loki / Jaeger</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
+        <span class="flow-type user-traffic">TRAFFIC</span>
+        <span>End User → Kong :8000 → App Backend :8080 / Frontend :80</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ==================== DATA FLOWS TAB ==================== -->
+<div id="tab-flows" class="tab-content">
+<div class="diagram-wrapper">
+  <table class="flow-table">
+    <thead>
+      <tr><th>ID</th><th>Type</th><th>From</th><th>To</th><th>Protocol</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>df-1</td>
+        <td><span class="flow-type metrics">Metrics</span></td>
+        <td>Prometheus</td>
+        <td>node_exporter (all VMs), cAdvisor (all VMs), Spring Actuator, Kong Admin :8001, MySQL Exporter, Grafana, Loki, Jaeger, OTel Collector</td>
+        <td>HTTP GET</td>
+        <td>Prometheus scrapes metrics from all targets every 15s</td>
+      </tr>
+      <tr>
+        <td>df-2</td>
+        <td><span class="flow-type traces">Traces</span></td>
+        <td>OTel Java Agent (Spring Boot)</td>
+        <td>OTel Collector :4317</td>
+        <td>gRPC (OTLP)</td>
+        <td>Spring Boot emits traces via auto-instrumented OTel Java agent</td>
+      </tr>
+      <tr>
+        <td>df-3</td>
+        <td><span class="flow-type traces">Traces</span></td>
+        <td>Kong OpenTelemetry Plugin</td>
+        <td>OTel Collector :4317</td>
+        <td>gRPC (OTLP)</td>
+        <td>Kong gateway emits W3C traces via OpenTelemetry plugin</td>
+      </tr>
+      <tr>
+        <td>df-4</td>
+        <td><span class="flow-type traces">Traces</span></td>
+        <td>OTel Collector</td>
+        <td>Jaeger :4327</td>
+        <td>gRPC (OTLP)</td>
+        <td>Collector pipelines and exports traces to Jaeger backend</td>
+      </tr>
+      <tr>
+        <td>df-5</td>
+        <td><span class="flow-type logs">Logs</span></td>
+        <td>Kong http-log Plugin</td>
+        <td>Loki :3100</td>
+        <td>HTTP POST</td>
+        <td>Kong pushes access logs directly to Loki API</td>
+      </tr>
+      <tr>
+        <td>df-6</td>
+        <td><span class="flow-type logs">Logs</span></td>
+        <td>Promtail (App VM)</td>
+        <td>Loki :3100</td>
+        <td>HTTP POST</td>
+        <td>Promtail ships application logs (/var/log/app) to Loki</td>
+      </tr>
+      <tr>
+        <td>df-7</td>
+        <td><span class="flow-type logs">Logs</span></td>
+        <td>Promtail (Network VM)</td>
+        <td>Loki :3100</td>
+        <td>HTTP POST</td>
+        <td>Promtail ships Kong logs (/var/log/kong) to Loki</td>
+      </tr>
+      <tr>
+        <td>df-8</td>
+        <td><span class="flow-type visualization">Visualization</span></td>
+        <td>Grafana</td>
+        <td>Prometheus :9090, Loki :3100, Jaeger :16686</td>
+        <td>PromQL / LogQL / HTTP</td>
+        <td>Grafana queries all three observability backends</td>
+      </tr>
+      <tr>
+        <td>df-9</td>
+        <td><span class="flow-type user-traffic">Traffic</span></td>
+        <td>End User</td>
+        <td>Kong :8000</td>
+        <td>HTTP</td>
+        <td>End users access the application through Kong proxy</td>
+      </tr>
+      <tr>
+        <td>df-10</td>
+        <td><span class="flow-type user-traffic">Traffic</span></td>
+        <td>Kong :8000</td>
+        <td>Spring Boot :8080, React :80</td>
+        <td>HTTP</td>
+        <td>Kong routes /api → Spring Boot, / → React frontend</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</div>
+
+<!-- ==================== JSON TAB ==================== -->
+<div id="tab-json" class="tab-content">
+<div class="json-wrapper">
+<pre class="json-block" id="json-output"></pre>
+</div>
+</div>
+
+<script>
+// Tab switching
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['diagram','flows','json'][i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// Corrected JSON schema
+const archData = {
+  "architecture": {
+    "name": "Observability Platform",
+    "environment": "integration",
+    "subnet": "192.168.127.0/24",
+    "vms": [
+      {
+        "name": "Monitoring VM",
+        "ip": "192.168.127.10",
+        "role": "observability",
+        "services": [
+          {
+            "name": "Prometheus",
+            "port": 9090,
+            "purpose": "Metrics collection and storage",
+            "storage": "Prometheus TSDB",
+            "retention": "15d",
+            "scrape_interval": "15s",
+            "query_language": "PromQL",
+            "scrape_targets": [
+              {"job": "app-spring-actuator", "host": "192.168.127.30", "port": 8080},
+              {"job": "app-cadvisor", "host": "192.168.127.30", "port": 8081},
+              {"job": "app-node-exporter", "host": "192.168.127.30", "port": 9100},
+              {"job": "app-mysql", "host": "192.168.127.30", "port": 9104},
+              {"job": "net-node-exporter", "host": "192.168.127.15", "port": 9100},
+              {"job": "net-kong", "host": "192.168.127.15", "port": 8001},
+              {"job": "net-cadvisor", "host": "192.168.127.15", "port": 8081},
+              {"job": "mon-cadvisor", "host": "192.168.127.10", "port": 8081},
+              {"job": "mon-node-exporter", "host": "192.168.127.10", "port": 9100},
+              {"job": "prometheus", "host": "192.168.127.10", "port": 9090},
+              {"job": "grafana", "host": "192.168.127.10", "port": 3000},
+              {"job": "loki", "host": "192.168.127.10", "port": 3100},
+              {"job": "jaeger", "host": "192.168.127.10", "port": 14269},
+              {"job": "otel-collector", "host": "192.168.127.10", "port": 8888}
+            ]
+          },
+          {
+            "name": "Loki",
+            "port": 3100,
+            "purpose": "Log aggregation and storage",
+            "retention": "7d",
+            "input_sources": ["Promtail (Application VM)", "Promtail (Network VM)", "Kong http-log Plugin (direct push)"]
+          },
+          {
+            "name": "Jaeger",
+            "ports": {
+              "ui": 16686,
+              "otlp_grpc": 4327,
+              "otlp_http": 4328,
+              "admin": 14269
+            },
+            "purpose": "Distributed tracing backend",
+            "storage": "Badger",
+            "input": "OTel Collector (OTLP gRPC :4327)"
+          },
+          {
+            "name": "OTel Collector",
+            "ports": {
+              "otlp_grpc": 4317,
+              "otlp_http": 4318,
+              "metrics": 8888,
+              "health": 13133
+            },
+            "purpose": "Telemetry pipeline — receives, processes, and exports traces",
+            "input_sources": ["OTel Java Agent (Spring Boot)", "Kong OpenTelemetry Plugin"],
+            "export_target": "Jaeger :4327"
+          },
+          {
+            "name": "Grafana",
+            "port": 3000,
+            "purpose": "Unified visualization dashboard",
+            "datasources": [
+              {"name": "Prometheus", "port": 9090, "type": "metrics"},
+              {"name": "Loki", "port": 3100, "type": "logs"},
+              {"name": "Jaeger", "port": 16686, "type": "traces"}
+            ]
+          },
+          {
+            "name": "node_exporter",
+            "port": 9100,
+            "purpose": "VM-level system metrics (CPU, memory, disk, network)"
+          },
+          {
+            "name": "cAdvisor",
+            "port": 8081,
+            "purpose": "Container resource usage metrics"
+          }
+        ]
+      },
+      {
+        "name": "Application VM",
+        "ip": "192.168.127.30",
+        "role": "application",
+        "services": [
+          {
+            "name": "React Frontend",
+            "port": 80,
+            "technology": "React",
+            "image": "mukundmadhav/react-frontend:latest"
+          },
+          {
+            "name": "Spring Boot Backend",
+            "port": 8080,
+            "technology": "Spring Boot",
+            "image": "mukundmadhav/spring-backend:latest",
+            "embedded_components": [
+              {
+                "name": "Spring Boot Actuator",
+                "purpose": "Exposes application metrics",
+                "endpoint": "/actuator"
+              },
+              {
+                "name": "OpenTelemetry Java Agent",
+                "version": "2.25.0",
+                "purpose": "Auto-instrumented distributed tracing",
+                "protocol": "gRPC (OTLP)",
+                "target": "OTel Collector :4317 (192.168.127.10)",
+                "propagator": "tracecontext,baggage",
+                "service_name": "react-springboot-app"
+              }
+            ]
+          },
+          {
+            "name": "MySQL",
+            "port": 3306,
+            "technology": "MySQL 8.0",
+            "database": "app-db"
+          },
+          {
+            "name": "MySQL Exporter",
+            "port": 9104,
+            "purpose": "Exports MySQL metrics for Prometheus"
+          },
+          {
+            "name": "Promtail",
+            "port": 9080,
+            "purpose": "Ships application logs to Loki",
+            "target": "Loki :3100 (192.168.127.10)"
+          },
+          {
+            "name": "node_exporter",
+            "port": 9100,
+            "purpose": "VM-level system metrics"
+          },
+          {
+            "name": "cAdvisor",
+            "port": 8081,
+            "purpose": "Container resource usage metrics"
+          }
+        ]
+      },
+      {
+        "name": "Network VM",
+        "ip": "192.168.127.15",
+        "role": "api-gateway",
+        "services": [
+          {
+            "name": "Kong Gateway",
+            "mode": "dbless",
+            "ports": {
+              "proxy": 8000,
+              "admin": 8001
+            },
+            "routes": [
+              {"name": "api-route", "path": "/api", "upstream": "192.168.127.30:8080"},
+              {"name": "actuator-route", "path": "/actuator", "upstream": "192.168.127.30:8080"},
+              {"name": "frontend-route", "path": "/", "upstream": "192.168.127.30:80"}
+            ],
+            "embedded_components": [
+              {
+                "name": "Prometheus Plugin",
+                "purpose": "Exposes Kong metrics on :8001/metrics"
+              },
+              {
+                "name": "OpenTelemetry Plugin",
+                "purpose": "Distributed tracing instrumentation",
+                "protocol": "gRPC (OTLP)",
+                "target": "OTel Collector :4317 (192.168.127.10)",
+                "header_type": "w3c",
+                "service_name": "kong-gateway"
+              },
+              {
+                "name": "http-log Plugin",
+                "purpose": "Pushes access logs to Loki",
+                "protocol": "HTTP POST",
+                "target": "Loki :3100 (192.168.127.10)"
+              },
+              {
+                "name": "correlation-id Plugin",
+                "purpose": "Injects X-Correlation-ID header",
+                "generator": "uuid#counter"
+              }
+            ]
+          },
+          {
+            "name": "Promtail",
+            "port": 9080,
+            "purpose": "Ships Kong logs to Loki",
+            "target": "Loki :3100 (192.168.127.10)"
+          },
+          {
+            "name": "node_exporter",
+            "port": 9100,
+            "purpose": "VM-level system metrics"
+          },
+          {
+            "name": "cAdvisor",
+            "port": 8081,
+            "purpose": "Container resource usage metrics"
+          }
+        ]
+      }
+    ],
+    "data_flows": [
+      {
+        "id": "df-1",
+        "type": "metrics",
+        "from": "Prometheus (192.168.127.10:9090)",
+        "to": ["node_exporter (all VMs :9100)", "cAdvisor (all VMs :8081)", "Spring Actuator (:8080)", "Kong Admin (:8001)", "MySQL Exporter (:9104)", "Grafana (:3000)", "Loki (:3100)", "Jaeger (:14269)", "OTel Collector (:8888)"],
+        "protocol": "HTTP GET (scrape)",
+        "interval": "15s",
+        "description": "Prometheus scrapes metrics from all registered targets across all 3 VMs"
+      },
+      {
+        "id": "df-2",
+        "type": "traces",
+        "from": "OTel Java Agent (Spring Boot, 192.168.127.30)",
+        "to": "OTel Collector (192.168.127.10:4317)",
+        "protocol": "gRPC (OTLP)",
+        "description": "Spring Boot emits traces via auto-instrumented OTel Java agent to the collector"
+      },
+      {
+        "id": "df-3",
+        "type": "traces",
+        "from": "Kong OpenTelemetry Plugin (192.168.127.15)",
+        "to": "OTel Collector (192.168.127.10:4317)",
+        "protocol": "gRPC (OTLP)",
+        "description": "Kong gateway emits W3C traces via OpenTelemetry plugin to the collector"
+      },
+      {
+        "id": "df-4",
+        "type": "traces",
+        "from": "OTel Collector (192.168.127.10)",
+        "to": "Jaeger (192.168.127.10:4327)",
+        "protocol": "gRPC (OTLP)",
+        "description": "OTel Collector pipelines and exports traces to Jaeger backend"
+      },
+      {
+        "id": "df-5",
+        "type": "logs",
+        "from": "Kong http-log Plugin (192.168.127.15)",
+        "to": "Loki (192.168.127.10:3100)",
+        "protocol": "HTTP POST",
+        "description": "Kong pushes access logs directly to Loki push API"
+      },
+      {
+        "id": "df-6",
+        "type": "logs",
+        "from": "Promtail (192.168.127.30:9080)",
+        "to": "Loki (192.168.127.10:3100)",
+        "protocol": "HTTP POST",
+        "description": "Promtail ships Spring Boot application logs to Loki"
+      },
+      {
+        "id": "df-7",
+        "type": "logs",
+        "from": "Promtail (192.168.127.15:9080)",
+        "to": "Loki (192.168.127.10:3100)",
+        "protocol": "HTTP POST",
+        "description": "Promtail ships Kong logs to Loki"
+      },
+      {
+        "id": "df-8",
+        "type": "visualization",
+        "from": "Grafana (192.168.127.10:3000)",
+        "to": ["Prometheus (:9090)", "Loki (:3100)", "Jaeger (:16686)"],
+        "protocol": "PromQL / LogQL / HTTP",
+        "description": "Grafana queries all three observability backends for unified dashboards"
+      },
+      {
+        "id": "df-9",
+        "type": "user-traffic",
+        "from": "End User",
+        "to": "Kong Proxy (192.168.127.15:8000)",
+        "protocol": "HTTP",
+        "description": "End users access the application through Kong API gateway"
+      },
+      {
+        "id": "df-10",
+        "type": "user-traffic",
+        "from": "Kong Proxy (192.168.127.15:8000)",
+        "to": ["Spring Boot (192.168.127.30:8080)", "React Frontend (192.168.127.30:80)"],
+        "protocol": "HTTP",
+        "description": "Kong routes /api and /actuator to Spring Boot, / to React frontend"
+      }
+    ],
+    "observability_pillars": {
+      "metrics": {
+        "collector": "Prometheus",
+        "exporters": ["node_exporter (all VMs)", "cAdvisor (all VMs)", "Spring Boot Actuator", "MySQL Exporter", "Kong Prometheus Plugin"],
+        "storage": "Prometheus TSDB (15d retention)",
+        "visualization": "Grafana"
+      },
+      "logs": {
+        "sources": ["Spring Boot app logs", "Kong access/error logs"],
+        "agents": ["Promtail (Application VM)", "Promtail (Network VM)", "Kong http-log plugin (direct)"],
+        "storage": "Loki (7d retention)",
+        "visualization": "Grafana"
+      },
+      "traces": {
+        "sources": ["OpenTelemetry Java Agent (Spring Boot)", "Kong OpenTelemetry Plugin"],
+        "pipeline": "OTel Collector (receive → process → export)",
+        "storage": "Jaeger (Badger)",
+        "propagation": "W3C Trace Context",
+        "visualization": "Grafana"
+      }
+    }
+  }
+};
+
+document.getElementById('json-output').textContent = JSON.stringify(archData, null, 2);
+</script>
+
+</body>
+</html>

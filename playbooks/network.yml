@@ -1,0 +1,43 @@
+---
+- name: Common setup for network hosts
+  hosts: network
+  roles:
+    - common
+    - docker
+    - node_exporter
+    - cadvisor
+  tags: [common, docker]
+
+- name: Deploy network gateway
+  hosts: network
+  roles:
+    - kong
+    - promtail
+  tags: [network]
+  tasks:
+    - name: Create stack directory
+      file:
+        path: "{{ stack_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy unified network docker-compose
+      template:
+        src: "{{ playbook_dir }}/templates/network-compose.yml.j2"
+        dest: "{{ stack_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Start network stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ stack_dir }}"
+        state: present
+      register: net_stack_result
+
+    - name: Wait for Kong
+      uri:
+        url: "http://localhost:{{ kong_admin_port }}/status"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: kong_health.status == 200
+      register: kong_health

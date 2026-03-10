@@ -1,0 +1,4 @@
+---
+kong_version: "3.9"
+kong_config_dir: /etc/kong
+kong_log_dir: /var/log/kong

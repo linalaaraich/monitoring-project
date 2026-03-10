@@ -1,0 +1,43 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [packages]
+
+- name: Install common packages
+  apt:
+    name: "{{ common_packages }}"
+    state: present
+  tags: [packages]
+
+- name: Set timezone
+  timezone:
+    name: "{{ timezone }}"
+  tags: [timezone]
+
+- name: Enable and configure UFW
+  when: firewall_enabled | default(false)
+  block:
+    - name: Allow SSH
+      ufw:
+        rule: allow
+        port: "{{ ssh_port }}"
+        proto: tcp
+
+    - name: Allow traffic from Ansible control node
+      ufw:
+        rule: allow
+        from_ip: "{{ ansible_control_ip }}"
+
+    - name: Allow traffic within monitoring subnet
+      ufw:
+        rule: allow
+        from_ip: 192.168.127.0/24
+
+    - name: Enable UFW (default deny incoming)
+      ufw:
+        state: enabled
+        default: deny
+        direction: incoming
+  tags: [firewall]

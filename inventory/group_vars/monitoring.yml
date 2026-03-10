@@ -1,0 +1,59 @@
+grafana_port: 3000
+prometheus_port: 9090
+loki_port: 3100
+jaeger_port_ui: 16686
+jaeger_port_collector: 14268
+badger_data_dir: /data/badger
+grafana_admin_password: "admin"
+grafana_datasources:
+  - prometheus
+  - loki
+  - jaeger
+prometheus_scrape_interval: "15s"
+prometheus_retention_days: 15
+prometheus_targets:
+  - job: "app-spring-actuator"
+    host: "192.168.127.30"
+    port: "8080"
+  - job: "app-cadvisor"
+    host: "192.168.127.30"
+    port: "{{ cadvisor_port }}"
+  - job: "app-node-exporter"
+    host: "192.168.127.30"
+    port: "{{ node_port }}"
+
+  - job: "net-node-exporter"
+    host: "192.168.127.15"
+    port: "{{ node_port }}"
+  - job: "net-kong"
+    host: "192.168.127.15"
+    port: "8001"
+  - job: "net-cadvisor"
+    host: "192.168.127.15"
+    port: "{{ cadvisor_port }}"
+
+  - job: "mon-cadvisor"
+    host: "192.168.127.10"
+    port: "{{ cadvisor_port }}"
+  - job: "mon-node-exporter"
+    host: "192.168.127.10"
+    port: "{{ node_port }}"
+  - job: "prometheus"
+    host: "192.168.127.10"
+    port: "{{ prometheus_port }}"
+  - job: "grafana"
+    host: "192.168.127.10"
+    port: "{{ grafana_port }}"
+  - job: "loki"
+    host: "192.168.127.10"
+    port: "{{ loki_port }}"
+  - job: "jaeger"
+    host: "192.168.127.10"
+    port: "14269"
+  - job: "app-mysql"
+    host: "192.168.127.30"
+    port: "9104"
+  - job: "otel-collector"
+    host: "192.168.127.10"
+    port: "8888"
+loki_retention_days: 7

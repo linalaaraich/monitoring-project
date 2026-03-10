@@ -1,0 +1,34 @@
+---
+- name: Create Jaeger config directory
+  file:
+    path: "{{ jaeger_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Jaeger data directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: "0755"
+  loop:
+    - "{{ jaeger_data_dir }}"
+    - "{{ jaeger_data_dir }}/keys"
+    - "{{ jaeger_data_dir }}/values"
+
+- name: Deploy Jaeger v2 config
+  template:
+    src: jaeger-config.yaml.j2
+    dest: "{{ jaeger_config_dir }}/config.yaml"
+    mode: "0644"
+  notify: restart stack
+
+- name: Deploy Jaeger UI config
+  copy:
+    src: ui-config.json
+    dest: "{{ jaeger_config_dir }}/ui-config.json"
+    mode: "0644"
+  notify: restart stack

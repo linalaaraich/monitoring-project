@@ -1,0 +1,110 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: app-mysql
+    restart: unless-stopped
+    ports:
+      - "{{ app_db_port }}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "{{ mysql_root_password }}"
+      MYSQL_DATABASE: "{{ mysql_database }}"
+      MYSQL_USER: "{{ mysql_user }}"
+      MYSQL_PASSWORD: "{{ mysql_password }}"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - {{ app_config_dir }}/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p{{ mysql_root_password }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  spring-boot:
+    build:
+      context: {{ app_config_dir }}/build
+      dockerfile: Dockerfile
+    image: springboot-app:latest
+    container_name: spring-boot
+    restart: unless-stopped
+    ports:
+      - "{{ app_frontend_port }}:8080"
+      - "{{ app_backend_port }}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: "{{ spring_profile }}"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/{{ mysql_database }}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      SPRING_DATASOURCE_USERNAME: "{{ mysql_user }}"
+      SPRING_DATASOURCE_PASSWORD: "{{ mysql_password }}"
+      JAVA_TOOL_OPTIONS: "-javaagent:{{ otel_agent_jar }}"
+      OTEL_SERVICE_NAME: "{{ otel_service_name }}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "{{ otel_exporter_endpoint }}"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+      OTEL_TRACES_EXPORTER: "otlp"
+      OTEL_METRICS_EXPORTER: "none"
+      OTEL_LOGS_EXPORTER: "none"
+      OTEL_PROPAGATORS: "tracecontext,baggage"
+    volumes:
+      - {{ otel_dir }}:{{ otel_dir }}:ro
+      - {{ app_log_dir }}:/var/log/app
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v{{ mysql_exporter_version }}
+    container_name: mysql-exporter
+    restart: unless-stopped
+    ports:
+      - "{{ mysql_exporter_port }}:9104"
+    environment:
+      DATA_SOURCE_NAME: "{{ mysql_user }}:{{ mysql_password }}@(mysql:3306)/{{ mysql_database }}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  promtail:
+    image: grafana/promtail:{{ promtail_version }}
+    container_name: promtail
+    restart: unless-stopped
+    ports:
+      - "{{ promtail_http_port }}:9080"
+    volumes:
+      - {{ promtail_config_dir }}/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - {{ app_log_dir }}:{{ app_log_dir }}:ro
+    command: -config.file=/etc/promtail/config.yml
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    ports:
+      - "{{ node_port }}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    ports:
+      - "{{ cadvisor_port }}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+
+volumes:
+  mysql_data:
+    driver: local

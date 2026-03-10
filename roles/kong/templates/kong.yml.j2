@@ -1,0 +1,52 @@
+_format_version: "3.0"
+
+services:
+  - name: app-backend
+    url: http://{{ app_backend_host }}:{{ app_backend_port }}
+    routes:
+      - name: api-route
+        paths:
+          - /api
+        strip_path: false
+      - name: actuator-route
+        paths:
+          - /actuator
+        strip_path: false
+
+  - name: app-frontend
+    url: http://{{ app_backend_host }}:80
+    routes:
+      - name: frontend-route
+        paths:
+          - /
+        strip_path: false
+
+plugins:
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      generator: uuid#counter
+      echo_downstream: true
+
+  - name: http-log
+    config:
+      http_endpoint: "{{ loki_push_endpoint }}"
+      method: POST
+      timeout: 10000
+      keepalive: 60000
+      flush_timeout: 2
+      retry_count: 3
+
+  - name: opentelemetry
+    config:
+      endpoint: "{{ jaeger_endpoint }}"
+      resource_attributes:
+        service.name: "kong-gateway"
+      header_type: w3c

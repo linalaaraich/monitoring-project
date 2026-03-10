@@ -1,0 +1,83 @@
+---
+- name: Common setup for monitoring hosts
+  hosts: monitoring
+  roles:
+    - common
+    - docker
+    - node_exporter
+    - cadvisor
+  tags: [common, docker]
+
+- name: Deploy monitoring stack
+  hosts: monitoring
+  roles:
+    - prometheus
+    - loki
+    - jaeger
+    - otel-collector
+    - grafana
+  tags: [monitoring]
+  tasks:
+    - name: Create stack directory
+      file:
+        path: "{{ stack_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy unified monitoring docker-compose
+      template:
+        src: "{{ playbook_dir }}/templates/monitoring-compose.yml.j2"
+        dest: "{{ stack_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Start monitoring stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ stack_dir }}"
+        state: present
+      register: monitoring_stack_result
+
+    - name: Wait for Prometheus
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/-/ready"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: prom_health.status == 200
+      register: prom_health
+
+    - name: Wait for Loki
+      uri:
+        url: "http://localhost:{{ loki_port }}/ready"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: loki_health.status == 200
+      register: loki_health
+
+    - name: Wait for Jaeger
+      uri:
+        url: "http://localhost:{{ jaeger_ui_port }}/"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: jaeger_health.status == 200
+      register: jaeger_health
+      ignore_errors: yes
+
+    - name: Wait for OTel Collector
+      uri:
+        url: "http://localhost:{{ otel_collector_health_port }}/"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: otel_health.status == 200
+      register: otel_health
+
+    - name: Wait for Grafana
+      uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: grafana_health.status == 200
+      register: grafana_health

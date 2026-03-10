@@ -1,0 +1,10 @@
+{
+  "archiveEnabled": false,
+  "dependencies": {
+    "menuEnabled": true
+  },
+  "tracking": {
+    "gaID": "",
+    "trackErrors": false
+  }
+}

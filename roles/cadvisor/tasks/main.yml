@@ -1,0 +1,6 @@
+---
+# cAdvisor container is defined in the unified per-VM docker-compose.
+# This role is a placeholder for any future cAdvisor-specific config.
+- name: Ensure cadvisor role is included
+  debug:
+    msg: "cAdvisor will be started as part of the unified stack"

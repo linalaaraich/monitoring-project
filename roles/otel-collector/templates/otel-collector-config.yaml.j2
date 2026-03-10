@@ -1,0 +1,35 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:{{ otel_collector_grpc_port }}"
+      http:
+        endpoint: "0.0.0.0:{{ otel_collector_http_port }}"
+
+processors:
+  batch:
+    send_batch_size: 8192
+    timeout: 5s
+
+exporters:
+  otlp/jaeger:
+    endpoint: "jaeger:{{ jaeger_otlp_grpc_port }}"
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:{{ otel_collector_health_port }}"
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+service:
+  extensions: [health_check, zpages]
+  telemetry:
+    metrics:
+      address: "0.0.0.0:{{ otel_collector_metrics_port }}"
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]

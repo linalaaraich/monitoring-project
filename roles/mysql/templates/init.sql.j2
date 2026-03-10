@@ -1,0 +1,3 @@
+-- Grant monitoring permissions to the app user for MySQL exporter
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO '{{ mysql_user }}'@'%';
+FLUSH PRIVILEGES;
