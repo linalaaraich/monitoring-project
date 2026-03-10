@@ -4,10 +4,6 @@
 
 AI-enhanced observability platform for CIRES Technologies' private cloud infrastructure at Tanger Med. Covers all three pillars of observability (metrics, logs, distributed tracing) plus a Grafana unified dashboard, with an AI layer for automated root cause analysis.
 
-**Intern:** LAARAICH Lina (DevOps/PFE)
-**Supervisor:** M. El Hamouchi Yousra
-**Duration:** 4 months
-
 ---
 
 ## Infrastructure
