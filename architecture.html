@@ -193,16 +193,16 @@
       <h3>Logs</h3>
       <ul>
         <li>Promtail on App VM &amp; Network VM</li>
-        <li>Kong http-log → Loki (direct push)</li>
-        <li>Spring Boot logs → Promtail → Loki</li>
+        <li>Promtail on App VM &amp; Network VM → Loki</li>
+        <li>Spring Boot logs (with trace_id) → Promtail → Loki</li>
       </ul>
     </div>
     <div class="pillar-card p-traces">
       <h3>Traces</h3>
       <ul>
-        <li>OTel Java Agent → OTel Collector :4317</li>
-        <li>Kong OTel plugin → OTel Collector :4317</li>
-        <li>OTel Collector → Jaeger :4327</li>
+        <li>OTel Java Agent → OTel Collector :4317 (gRPC)</li>
+        <li>Kong OTel plugin → OTel Collector :4318 (HTTP)</li>
+        <li>OTel Collector → Jaeger :4317 (internal Docker)</li>
       </ul>
     </div>
   </div>
@@ -270,21 +270,18 @@
       </div>
       <div class="vm-body">
         <div class="svc pillar-app">
-          <div class="svc-name">React Frontend</div>
-          <div class="svc-port">:80</div>
-        </div>
-        <div class="svc pillar-app">
-          <div class="svc-name">Spring Boot</div>
-          <div class="svc-port">:8080</div>
+          <div class="svc-name">Spring Boot + React</div>
+          <div class="svc-port">:80 → :8080 (container)</div>
+          <div class="svc-badge" style="background:rgba(64,208,208,.12);color:var(--accent-cyan)">Unified</div>
           <div class="embedded">
             <span class="emb-icon" style="background:var(--accent-blue)"></span>
             <span class="emb-name">Actuator</span>
-            <div class="emb-detail">Metrics on :8080/actuator</div>
+            <div class="emb-detail">Metrics scraped via Kong :8000/actuator/prometheus</div>
           </div>
           <div class="embedded">
             <span class="emb-icon" style="background:var(--accent-orange)"></span>
             <span class="emb-name">OTel Java Agent</span>
-            <div class="emb-detail">gRPC → OTel Collector :4317</div>
+            <div class="emb-detail">gRPC → OTel Collector :4317 | propagators: w3c, b3multi</div>
           </div>
         </div>
         <div class="svc pillar-app">
@@ -327,18 +324,8 @@
           </div>
           <div class="embedded">
             <span class="emb-icon" style="background:var(--accent-orange)"></span>
-            <span class="emb-name">OpenTelemetry Plugin</span>
-            <div class="emb-detail">W3C traces → OTel Collector :4317</div>
-          </div>
-          <div class="embedded">
-            <span class="emb-icon" style="background:var(--accent-green)"></span>
-            <span class="emb-name">http-log Plugin</span>
-            <div class="emb-detail">Logs → Loki :3100</div>
-          </div>
-          <div class="embedded">
-            <span class="emb-icon" style="background:var(--muted)"></span>
-            <span class="emb-name">correlation-id Plugin</span>
-            <div class="emb-detail">X-Correlation-ID header</div>
+            <span class="emb-name">OpenTelemetry Plugin (per-service)</span>
+            <div class="emb-detail">W3C traces → OTel Collector :4318 (HTTP) | extract: w3c, b3</div>
           </div>
         </div>
         <div class="svc pillar-logs">
@@ -367,19 +354,15 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
         <span class="flow-type traces">TRACES</span>
-        <span>OTel Java Agent → OTel Collector :4317 → Jaeger :4327</span>
+        <span>OTel Java Agent → OTel Collector :4317 (gRPC) → Jaeger</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
         <span class="flow-type traces">TRACES</span>
-        <span>Kong OTel Plugin → OTel Collector :4317 → Jaeger :4327</span>
+        <span>Kong OTel Plugin → OTel Collector :4318 (HTTP) → Jaeger</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
         <span class="flow-type logs">LOGS</span>
-        <span>Kong http-log → Loki :3100 (direct push)</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
-        <span class="flow-type logs">LOGS</span>
-        <span>Promtail (App/Net VMs) → Loki :3100</span>
+        <span>Promtail (App/Net VMs) → Loki :3100 (with trace_id extraction)</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
         <span class="flow-type visualization">VIZ</span>
@@ -387,7 +370,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);font-size:12px;">
         <span class="flow-type user-traffic">TRAFFIC</span>
-        <span>End User → Kong :8000 → App Backend :8080 / Frontend :80</span>
+        <span>End User → Kong :8000 → Spring Boot :80 (/api, /actuator, /)</span>
       </div>
     </div>
   </div>
@@ -407,7 +390,7 @@
         <td>df-1</td>
         <td><span class="flow-type metrics">Metrics</span></td>
         <td>Prometheus</td>
-        <td>node_exporter (all VMs), cAdvisor (all VMs), Spring Actuator, Kong Admin :8001, MySQL Exporter, Grafana, Loki, Jaeger, OTel Collector</td>
+        <td>node_exporter (all VMs), cAdvisor (all VMs), Spring Actuator (via Kong :8000), Kong Admin :8001, MySQL Exporter, Grafana, Loki, Jaeger, OTel Collector</td>
         <td>HTTP GET</td>
         <td>Prometheus scrapes metrics from all targets every 15s</td>
       </tr>
@@ -422,29 +405,21 @@
       <tr>
         <td>df-3</td>
         <td><span class="flow-type traces">Traces</span></td>
-        <td>Kong OpenTelemetry Plugin</td>
-        <td>OTel Collector :4317</td>
-        <td>gRPC (OTLP)</td>
-        <td>Kong gateway emits W3C traces via OpenTelemetry plugin</td>
+        <td>Kong OpenTelemetry Plugin (per-service)</td>
+        <td>OTel Collector :4318</td>
+        <td>HTTP (OTLP)</td>
+        <td>Kong gateway emits W3C traces via per-service OpenTelemetry plugin (extract: w3c + b3)</td>
       </tr>
       <tr>
         <td>df-4</td>
         <td><span class="flow-type traces">Traces</span></td>
         <td>OTel Collector</td>
-        <td>Jaeger :4327</td>
+        <td>Jaeger :4317 (internal Docker network)</td>
         <td>gRPC (OTLP)</td>
-        <td>Collector pipelines and exports traces to Jaeger backend</td>
+        <td>Collector exports traces to Jaeger via internal Docker network (host port :4327)</td>
       </tr>
       <tr>
         <td>df-5</td>
-        <td><span class="flow-type logs">Logs</span></td>
-        <td>Kong http-log Plugin</td>
-        <td>Loki :3100</td>
-        <td>HTTP POST</td>
-        <td>Kong pushes access logs directly to Loki API</td>
-      </tr>
-      <tr>
-        <td>df-6</td>
         <td><span class="flow-type logs">Logs</span></td>
         <td>Promtail (App VM)</td>
         <td>Loki :3100</td>
@@ -452,7 +427,7 @@
         <td>Promtail ships application logs (/var/log/app) to Loki</td>
       </tr>
       <tr>
-        <td>df-7</td>
+        <td>df-6</td>
         <td><span class="flow-type logs">Logs</span></td>
         <td>Promtail (Network VM)</td>
         <td>Loki :3100</td>
@@ -460,7 +435,7 @@
         <td>Promtail ships Kong logs (/var/log/kong) to Loki</td>
       </tr>
       <tr>
-        <td>df-8</td>
+        <td>df-7</td>
         <td><span class="flow-type visualization">Visualization</span></td>
         <td>Grafana</td>
         <td>Prometheus :9090, Loki :3100, Jaeger :16686</td>
@@ -468,7 +443,7 @@
         <td>Grafana queries all three observability backends</td>
       </tr>
       <tr>
-        <td>df-9</td>
+        <td>df-8</td>
         <td><span class="flow-type user-traffic">Traffic</span></td>
         <td>End User</td>
         <td>Kong :8000</td>
@@ -476,12 +451,12 @@
         <td>End users access the application through Kong proxy</td>
       </tr>
       <tr>
-        <td>df-10</td>
+        <td>df-9</td>
         <td><span class="flow-type user-traffic">Traffic</span></td>
         <td>Kong :8000</td>
-        <td>Spring Boot :8080, React :80</td>
+        <td>Spring Boot :80 (host) → :8080 (container)</td>
         <td>HTTP</td>
-        <td>Kong routes /api → Spring Boot, / → React frontend</td>
+        <td>Kong routes /api, /actuator → backend; / → frontend (same Spring Boot container)</td>
       </tr>
     </tbody>
   </table>
@@ -526,7 +501,7 @@ const archData = {
             "scrape_interval": "15s",
             "query_language": "PromQL",
             "scrape_targets": [
-              {"job": "app-spring-actuator", "host": "192.168.127.30", "port": 8080},
+              {"job": "app-spring-actuator", "host": "192.168.127.15", "port": 8000, "metrics_path": "/actuator/prometheus"},
               {"job": "app-cadvisor", "host": "192.168.127.30", "port": 8081},
               {"job": "app-node-exporter", "host": "192.168.127.30", "port": 9100},
               {"job": "app-mysql", "host": "192.168.127.30", "port": 9104},
@@ -547,7 +522,7 @@ const archData = {
             "port": 3100,
             "purpose": "Log aggregation and storage",
             "retention": "7d",
-            "input_sources": ["Promtail (Application VM)", "Promtail (Network VM)", "Kong http-log Plugin (direct push)"]
+            "input_sources": ["Promtail (Application VM)", "Promtail (Network VM)"]
           },
           {
             "name": "Jaeger",
@@ -559,7 +534,7 @@ const archData = {
             },
             "purpose": "Distributed tracing backend",
             "storage": "Badger",
-            "input": "OTel Collector (OTLP gRPC :4327)"
+            "input": "OTel Collector (OTLP gRPC, internal Docker port :4317, host port :4327)"
           },
           {
             "name": "OTel Collector",
@@ -570,18 +545,19 @@ const archData = {
               "health": 13133
             },
             "purpose": "Telemetry pipeline — receives, processes, and exports traces",
-            "input_sources": ["OTel Java Agent (Spring Boot)", "Kong OpenTelemetry Plugin"],
-            "export_target": "Jaeger :4327"
+            "input_sources": ["OTel Java Agent (Spring Boot, gRPC :4317)", "Kong OpenTelemetry Plugin (HTTP :4318)"],
+            "export_target": "Jaeger :4317 (internal Docker network)"
           },
           {
             "name": "Grafana",
             "port": 3000,
             "purpose": "Unified visualization dashboard",
             "datasources": [
-              {"name": "Prometheus", "port": 9090, "type": "metrics"},
-              {"name": "Loki", "port": 3100, "type": "logs"},
-              {"name": "Jaeger", "port": 16686, "type": "traces"}
-            ]
+              {"name": "Prometheus", "url": "http://prometheus:9090", "type": "metrics"},
+              {"name": "Loki", "url": "http://loki:3100", "type": "logs"},
+              {"name": "Jaeger", "url": "http://jaeger:16686", "type": "traces"}
+            ],
+            "note": "Datasources use Docker service names (internal network), not localhost"
           },
           {
             "name": "node_exporter",
@@ -601,20 +577,14 @@ const archData = {
         "role": "application",
         "services": [
           {
-            "name": "React Frontend",
-            "port": 80,
-            "technology": "React",
-            "image": "mukundmadhav/react-frontend:latest"
-          },
-          {
-            "name": "Spring Boot Backend",
-            "port": 8080,
-            "technology": "Spring Boot",
-            "image": "mukundmadhav/spring-backend:latest",
+            "name": "Spring Boot + React (unified)",
+            "ports": {"host": 80, "container": 8080},
+            "technology": "Spring Boot (serves React frontend + API)",
+            "image": "mukundmadhav/react-springboot:latest",
             "embedded_components": [
               {
                 "name": "Spring Boot Actuator",
-                "purpose": "Exposes application metrics",
+                "purpose": "Exposes application metrics (scraped via Kong :8000/actuator/prometheus)",
                 "endpoint": "/actuator"
               },
               {
@@ -623,7 +593,7 @@ const archData = {
                 "purpose": "Auto-instrumented distributed tracing",
                 "protocol": "gRPC (OTLP)",
                 "target": "OTel Collector :4317 (192.168.127.10)",
-                "propagator": "tracecontext,baggage",
+                "propagator": "tracecontext,baggage,b3multi",
                 "service_name": "react-springboot-app"
               }
             ]
@@ -670,33 +640,23 @@ const archData = {
               "admin": 8001
             },
             "routes": [
-              {"name": "api-route", "path": "/api", "upstream": "192.168.127.30:8080"},
-              {"name": "actuator-route", "path": "/actuator", "upstream": "192.168.127.30:8080"},
+              {"name": "api-route", "path": "/api", "upstream": "192.168.127.30:80"},
+              {"name": "actuator-route", "path": "/actuator", "upstream": "192.168.127.30:80"},
               {"name": "frontend-route", "path": "/", "upstream": "192.168.127.30:80"}
             ],
             "embedded_components": [
               {
-                "name": "Prometheus Plugin",
+                "name": "Prometheus Plugin (global)",
                 "purpose": "Exposes Kong metrics on :8001/metrics"
               },
               {
-                "name": "OpenTelemetry Plugin",
+                "name": "OpenTelemetry Plugin (per-service)",
                 "purpose": "Distributed tracing instrumentation",
-                "protocol": "gRPC (OTLP)",
-                "target": "OTel Collector :4317 (192.168.127.10)",
+                "protocol": "HTTP (OTLP)",
+                "target": "OTel Collector :4318 (192.168.127.10)",
                 "header_type": "w3c",
+                "propagation": {"extract": ["w3c", "b3"], "inject": ["w3c"]},
                 "service_name": "kong-gateway"
-              },
-              {
-                "name": "http-log Plugin",
-                "purpose": "Pushes access logs to Loki",
-                "protocol": "HTTP POST",
-                "target": "Loki :3100 (192.168.127.10)"
-              },
-              {
-                "name": "correlation-id Plugin",
-                "purpose": "Injects X-Correlation-ID header",
-                "generator": "uuid#counter"
               }
             ]
           },
@@ -724,7 +684,7 @@ const archData = {
         "id": "df-1",
         "type": "metrics",
         "from": "Prometheus (192.168.127.10:9090)",
-        "to": ["node_exporter (all VMs :9100)", "cAdvisor (all VMs :8081)", "Spring Actuator (:8080)", "Kong Admin (:8001)", "MySQL Exporter (:9104)", "Grafana (:3000)", "Loki (:3100)", "Jaeger (:14269)", "OTel Collector (:8888)"],
+        "to": ["node_exporter (all VMs :9100)", "cAdvisor (all VMs :8081)", "Spring Actuator (via Kong :8000)", "Kong Admin (:8001)", "MySQL Exporter (:9104)", "Grafana (:3000)", "Loki (:3100)", "Jaeger (:14269)", "OTel Collector (:8888)"],
         "protocol": "HTTP GET (scrape)",
         "interval": "15s",
         "description": "Prometheus scrapes metrics from all registered targets across all 3 VMs"
@@ -740,29 +700,21 @@ const archData = {
       {
         "id": "df-3",
         "type": "traces",
-        "from": "Kong OpenTelemetry Plugin (192.168.127.15)",
-        "to": "OTel Collector (192.168.127.10:4317)",
-        "protocol": "gRPC (OTLP)",
-        "description": "Kong gateway emits W3C traces via OpenTelemetry plugin to the collector"
+        "from": "Kong OpenTelemetry Plugin (192.168.127.15, per-service)",
+        "to": "OTel Collector (192.168.127.10:4318)",
+        "protocol": "HTTP (OTLP)",
+        "description": "Kong gateway emits W3C traces via per-service OpenTelemetry plugin (extract: w3c + b3)"
       },
       {
         "id": "df-4",
         "type": "traces",
         "from": "OTel Collector (192.168.127.10)",
-        "to": "Jaeger (192.168.127.10:4327)",
+        "to": "Jaeger (192.168.127.10, internal Docker port :4317, host port :4327)",
         "protocol": "gRPC (OTLP)",
-        "description": "OTel Collector pipelines and exports traces to Jaeger backend"
+        "description": "OTel Collector exports traces to Jaeger via internal Docker network"
       },
       {
         "id": "df-5",
-        "type": "logs",
-        "from": "Kong http-log Plugin (192.168.127.15)",
-        "to": "Loki (192.168.127.10:3100)",
-        "protocol": "HTTP POST",
-        "description": "Kong pushes access logs directly to Loki push API"
-      },
-      {
-        "id": "df-6",
         "type": "logs",
         "from": "Promtail (192.168.127.30:9080)",
         "to": "Loki (192.168.127.10:3100)",
@@ -770,7 +722,7 @@ const archData = {
         "description": "Promtail ships Spring Boot application logs to Loki"
       },
       {
-        "id": "df-7",
+        "id": "df-6",
         "type": "logs",
         "from": "Promtail (192.168.127.15:9080)",
         "to": "Loki (192.168.127.10:3100)",
@@ -778,7 +730,7 @@ const archData = {
         "description": "Promtail ships Kong logs to Loki"
       },
       {
-        "id": "df-8",
+        "id": "df-7",
         "type": "visualization",
         "from": "Grafana (192.168.127.10:3000)",
         "to": ["Prometheus (:9090)", "Loki (:3100)", "Jaeger (:16686)"],
@@ -786,7 +738,7 @@ const archData = {
         "description": "Grafana queries all three observability backends for unified dashboards"
       },
       {
-        "id": "df-9",
+        "id": "df-8",
         "type": "user-traffic",
         "from": "End User",
         "to": "Kong Proxy (192.168.127.15:8000)",
@@ -794,12 +746,12 @@ const archData = {
         "description": "End users access the application through Kong API gateway"
       },
       {
-        "id": "df-10",
+        "id": "df-9",
         "type": "user-traffic",
         "from": "Kong Proxy (192.168.127.15:8000)",
-        "to": ["Spring Boot (192.168.127.30:8080)", "React Frontend (192.168.127.30:80)"],
+        "to": "Spring Boot (192.168.127.30:80 host → :8080 container)",
         "protocol": "HTTP",
-        "description": "Kong routes /api and /actuator to Spring Boot, / to React frontend"
+        "description": "Kong routes /api, /actuator, and / to unified Spring Boot container"
       }
     ],
     "observability_pillars": {
@@ -811,7 +763,7 @@ const archData = {
       },
       "logs": {
         "sources": ["Spring Boot app logs", "Kong access/error logs"],
-        "agents": ["Promtail (Application VM)", "Promtail (Network VM)", "Kong http-log plugin (direct)"],
+        "agents": ["Promtail (Application VM)", "Promtail (Network VM)"],
         "storage": "Loki (7d retention)",
         "visualization": "Grafana"
       },
@@ -819,7 +771,7 @@ const archData = {
         "sources": ["OpenTelemetry Java Agent (Spring Boot)", "Kong OpenTelemetry Plugin"],
         "pipeline": "OTel Collector (receive → process → export)",
         "storage": "Jaeger (Badger)",
-        "propagation": "W3C Trace Context",
+        "propagation": "W3C Trace Context + B3 Multi (extraction)",
         "visualization": "Grafana"
       }
     }
