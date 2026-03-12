@@ -4,7 +4,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://localhost:{{ prometheus_port }}
+    url: http://prometheus:{{ prometheus_port }}
     isDefault: true
     uid: prometheus
     jsonData:
@@ -13,7 +13,7 @@ datasources:
   - name: Loki
     type: loki
     access: proxy
-    url: http://localhost:{{ loki_port }}
+    url: http://loki:{{ loki_port }}
     uid: loki
     jsonData:
       derivedFields:
@@ -25,7 +25,7 @@ datasources:
   - name: Jaeger
     type: jaeger
     access: proxy
-    url: http://localhost:{{ jaeger_port_ui }}
+    url: http://jaeger:{{ jaeger_port_ui }}
     uid: jaeger
     jsonData:
       tracesToMetrics:

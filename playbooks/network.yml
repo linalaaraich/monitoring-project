@@ -31,6 +31,7 @@
       community.docker.docker_compose_v2:
         project_src: "{{ stack_dir }}"
         state: present
+        recreate: always
       register: net_stack_result
 
     - name: Wait for Kong

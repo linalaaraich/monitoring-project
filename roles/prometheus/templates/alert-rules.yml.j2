@@ -4,7 +4,7 @@ groups:
     rules:
       # US-T02: Alert when P95 latency exceeds 1 second
       - alert: HighP95Latency
-        expr: histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket{job="app-spring-actuator"}[5m])) by (le)) > 1000
+        expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job="app-spring-actuator"}[5m])) by (le)) * 1000 > 1000
         for: 2m
         labels:
           severity: warning

@@ -2,7 +2,7 @@ grafana_port: 3000
 prometheus_port: 9090
 loki_port: 3100
 jaeger_port_ui: 16686
-jaeger_port_collector: 14268
+jaeger_port_collector: 4317
 badger_data_dir: /data/badger
 grafana_admin_password: "admin"
 grafana_datasources:
@@ -13,8 +13,9 @@ prometheus_scrape_interval: "15s"
 prometheus_retention_days: 15
 prometheus_targets:
   - job: "app-spring-actuator"
-    host: "192.168.127.30"
-    port: "8080"
+    host: "192.168.127.15"
+    port: "8000"
+    metrics_path: "/actuator/prometheus"
   - job: "app-cadvisor"
     host: "192.168.127.30"
     port: "{{ cadvisor_port }}"
@@ -28,6 +29,7 @@ prometheus_targets:
   - job: "net-kong"
     host: "192.168.127.15"
     port: "8001"
+    metrics_path: "/metrics"
   - job: "net-cadvisor"
     host: "192.168.127.15"
     port: "{{ cadvisor_port }}"

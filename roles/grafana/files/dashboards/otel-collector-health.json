@@ -33,7 +33,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(rate(otelcol_receiver_accepted_spans_total[5m]))",
+          "expr": "sum(rate(otelcol_receiver_accepted_spans_total[5m])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -49,7 +49,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(rate(otelcol_exporter_sent_spans_total[5m]))",
+          "expr": "sum(rate(otelcol_exporter_sent_spans_total[5m])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -65,7 +65,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(rate(otelcol_processor_dropped_spans_total[5m]))",
+          "expr": "sum(rate(otelcol_processor_dropped_spans_total[5m])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -91,7 +91,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(rate(otelcol_processor_dropped_spans_total[5m])) / clamp_min(sum(rate(otelcol_receiver_accepted_spans_total[5m])), 1) * 100",
+          "expr": "(sum(rate(otelcol_processor_dropped_spans_total[5m])) or vector(0)) / clamp_min(sum(rate(otelcol_receiver_accepted_spans_total[5m])), 1) * 100",
           "refId": "A"
         }
       ],

@@ -8,10 +8,8 @@ rule_files:
 scrape_configs:
 {% for target in prometheus_targets %}
   - job_name: '{{ target.job }}'
-{% if target.job == 'app-spring-actuator' %}
-    metrics_path: '/actuator/prometheus'
-{% elif target.job == 'net-kong' %}
-    metrics_path: '/metrics'
+{% if target.metrics_path is defined %}
+    metrics_path: '{{ target.metrics_path }}'
 {% endif %}
     static_configs:
       - targets: ['{{ target.host }}:{{ target.port }}']

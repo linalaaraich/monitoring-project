@@ -10,5 +10,5 @@ kong_log_path: "/var/log/kong/*.log"
 
 kong_plugins:
   - prometheus
-  - http-log
+  - opentelemetry
   - correlation-id

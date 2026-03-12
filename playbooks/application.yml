@@ -28,16 +28,17 @@
         dest: "{{ stack_dir }}/docker-compose.yml"
         mode: "0644"
 
-    - name: Build application image
+    - name: Build and deploy application stack
       community.docker.docker_compose_v2:
         project_src: "{{ stack_dir }}"
         build: always
         state: present
+        recreate: always
       register: app_stack_result
 
     - name: Wait for Spring Boot
       uri:
-        url: "http://localhost:{{ app_backend_port }}/actuator/health"
+        url: "http://localhost:{{ app_frontend_port }}/actuator/health"
         status_code: 200
       retries: 30
       delay: 10
