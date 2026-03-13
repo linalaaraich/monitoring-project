@@ -145,6 +145,22 @@
       }
     },
     {
+      "title": "Alertmanager",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 4, "x": 8, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "up{job=\"alertmanager\"}", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+    {
       "title": "Scrape Targets UP",
       "type": "stat",
       "gridPos": { "h": 3, "w": 4, "x": 8, "y": 4 },
@@ -296,7 +312,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "count by(job) (container_last_seen{name!=\"\"})",
+          "expr": "count by(job) (max by(name, job) (container_last_seen{name!=\"\"}))",
           "legendFormat": "{{ job }}",
           "refId": "A"
         }

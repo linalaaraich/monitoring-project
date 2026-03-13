@@ -1,5 +1,14 @@
 grafana_port: 3000
 prometheus_port: 9090
+alertmanager_port: 9093
+
+# Alertmanager SMTP config — Gmail free tier
+# Generate app password: Google Account → Security → 2-Step Verification → App Passwords
+alertmanager_smtp_smarthost: "smtp.gmail.com:587"
+alertmanager_smtp_from: "laaraichlina@gmail.com"
+alertmanager_smtp_username: "laaraichlina@gmail.com"
+alertmanager_smtp_password: "{{ lookup('env', 'ALERTMANAGER_SMTP_PASSWORD') }}"
+alertmanager_receiver_email: "laaraichlina@gmail.com"
 loki_port: 3100
 jaeger_port_ui: 16686
 jaeger_port_collector: 4317
@@ -58,4 +67,7 @@ prometheus_targets:
   - job: "otel-collector"
     host: "192.168.127.10"
     port: "8888"
+  - job: "alertmanager"
+    host: "192.168.127.10"
+    port: "{{ alertmanager_port }}"
 loki_retention_days: 7

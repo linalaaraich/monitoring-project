@@ -46,4 +46,86 @@ groups:
         annotations:
           summary: "OTel Collector is down"
           description: "The OTel Collector instance has been unreachable for 1 minute."
+
+  - name: infrastructure_alerts
+    rules:
+      # Disk usage exceeds 85%
+      - alert: HighDiskUsage
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!=""} / node_filesystem_size_bytes{mountpoint="/",fstype!=""}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 85% on {{ $labels.instance }}"
+          description: "Root filesystem on {{ $labels.instance }} is at {{ $value | humanize }}% usage."
+
+      # Disk usage exceeds 95% (critical)
+      - alert: CriticalDiskUsage
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!=""} / node_filesystem_size_bytes{mountpoint="/",fstype!=""}) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 95% on {{ $labels.instance }}"
+          description: "Root filesystem on {{ $labels.instance }} is at {{ $value | humanize }}% usage. Immediate action required."
+
+      # CPU usage sustained above 85%
+      - alert: HighCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage on {{ $labels.instance }} has been above 85% for 5 minutes (current: {{ $value | humanize }}%)."
+
+      # CPU usage sustained above 95% (critical)
+      - alert: CriticalCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage on {{ $labels.instance }} has been above 95% for 2 minutes (current: {{ $value | humanize }}%)."
+
+      # Memory usage exceeds 85%
+      - alert: HighMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage on {{ $labels.instance }} is at {{ $value | humanize }}%."
+
+      # Memory usage exceeds 95% (critical)
+      - alert: CriticalMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage on {{ $labels.instance }} is at {{ $value | humanize }}%. OOM risk."
+
+      # Any monitored target is down
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.job }} down on {{ $labels.instance }}"
+          description: "Prometheus target {{ $labels.job }} on {{ $labels.instance }} has been unreachable for 2 minutes."
+
+      # Disk will fill within 24 hours (predictive)
+      - alert: DiskFillingUp
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!=""}[6h], 24*3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk predicted to fill within 24h on {{ $labels.instance }}"
+          description: "Based on the last 6 hours of data, the root filesystem on {{ $labels.instance }} is predicted to run out of space within 24 hours."
 {% endraw %}

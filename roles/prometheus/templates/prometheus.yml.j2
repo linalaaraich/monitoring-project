@@ -2,6 +2,11 @@ global:
   scrape_interval: {{ prometheus_scrape_interval }}
   evaluation_interval: {{ prometheus_scrape_interval }}
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:{{ alertmanager_port }}']
+
 rule_files:
   - /etc/prometheus/alert-rules.yml
 

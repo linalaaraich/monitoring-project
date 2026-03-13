@@ -22,6 +22,15 @@ datasources:
           name: TraceID
           url: "$${__value.raw}"
 
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:{{ alertmanager_port }}
+    uid: alertmanager
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false
+
   - name: Jaeger
     type: jaeger
     access: proxy

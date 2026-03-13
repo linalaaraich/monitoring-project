@@ -3,6 +3,23 @@
 FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /build
 RUN git clone https://github.com/mukundmadhav/react-springboot-mysql.git .
+
+# Inject actuator + Prometheus metrics dependencies (not in upstream pom.xml)
+RUN sed -i '/<\/dependencies>/i \
+    <dependency>\
+        <groupId>org.springframework.boot<\/groupId>\
+        <artifactId>spring-boot-starter-actuator<\/artifactId>\
+    <\/dependency>\
+    <dependency>\
+        <groupId>io.micrometer<\/groupId>\
+        <artifactId>micrometer-registry-prometheus<\/artifactId>\
+    <\/dependency>' pom.xml
+
+# Expose actuator endpoints for monitoring
+RUN mkdir -p src/main/resources && \
+    echo 'management.endpoints.web.exposure.include=health,info,prometheus,metrics' >> src/main/resources/application.properties && \
+    echo 'management.endpoint.health.show-details=always' >> src/main/resources/application.properties
+
 RUN mvn clean package -DskipTests
 
 # Stage 2: Runtime image with OTel agent support
