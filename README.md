@@ -1,4 +1,4 @@
-# Observability Platform — CIRES Technologies
+# Observability Platform
 
 Ansible-based observability stack deploying metrics, logs, and distributed tracing across 3 VMs in an integration environment. The monitored application is `mukundmadhav/react-springboot-mysql` — all instrumentation is injected externally via OpenTelemetry Java agent and Kong plugins.
 
