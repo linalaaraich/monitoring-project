@@ -6,6 +6,7 @@ jaeger_otlp_http_port: 4318
 jaeger_host_otlp_grpc_port: 4327
 jaeger_host_otlp_http_port: 4328
 jaeger_admin_port: 14269
+jaeger_metrics_port: 14269
 jaeger_data_dir: /data/badger
 jaeger_span_ttl: "168h"
 jaeger_batch_size: 10000

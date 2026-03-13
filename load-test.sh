@@ -7,7 +7,7 @@
 set -euo pipefail
 
 KONG="http://192.168.127.15:8000"
-APP="http://192.168.127.30:8080"
+APP="http://192.168.127.30:80"
 TOTAL=9000
 BATCH=50        # parallel requests per batch
 INSERTED=0

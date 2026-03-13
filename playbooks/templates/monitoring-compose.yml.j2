@@ -39,6 +39,7 @@ services:
       - "{{ jaeger_ui_port }}:16686"
       - "{{ jaeger_host_otlp_grpc_port }}:4317"
       - "{{ jaeger_host_otlp_http_port }}:4318"
+      - "{{ jaeger_metrics_port | default(14269) }}:8888"
     volumes:
       - {{ jaeger_config_dir }}/config.yaml:/etc/jaeger/config.yaml:ro
       - {{ jaeger_config_dir }}/ui-config.json:/etc/jaeger/ui-config.json:ro
