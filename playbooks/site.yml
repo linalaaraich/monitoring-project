@@ -9,4 +9,4 @@
 - import_playbook: application.yml
 - import_playbook: network.yml
 # Integration tests (run after deployment)
-# - import_playbook: integration.yml
+- import_playbook: integration.yml
