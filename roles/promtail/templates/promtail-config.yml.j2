@@ -40,7 +40,7 @@ scrape_configs:
       - regex:
           expression: 'trace_id=(?P<trace_id>[a-f0-9]+)'
       - labels:
-          trace_id:
+          trace_id:  # Extracted from regex named group
 {% endif %}
 
 {% if 'network' in group_names %}

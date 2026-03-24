@@ -18,9 +18,10 @@ datasources:
     jsonData:
       derivedFields:
         - datasourceUid: jaeger
-          matcherRegex: "trace_id=(\\w+)"
+          matcherRegex: "" # Use labelName instead
           name: TraceID
-          url: "$${__value.raw}"
+          labelName: trace_id
+          url: 'http://jaeger:{{ jaeger_port_ui }}/trace/$${__value.raw}'
 
   - name: Alertmanager
     type: alertmanager

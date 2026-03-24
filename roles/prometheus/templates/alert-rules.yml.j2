@@ -109,6 +109,26 @@ groups:
           summary: "Critical memory usage on {{ $labels.instance }}"
           description: "Memory usage on {{ $labels.instance }} is at {{ $value | humanize }}%. OOM risk."
 
+      # Teammate integration: Medium CPU usage (80% for 1m)
+      - alert: MediumCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100) > 80
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Medium CPU usage on {{ $labels.instance }}"
+          description: "CPU usage on {{ $labels.instance }} has been above 80% for 1 minute (current: {{ $value | humanize }}%)."
+
+      # Teammate integration: Medium memory usage (80% for 1m)
+      - alert: MediumMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 80
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Medium memory usage on {{ $labels.instance }}"
+          description: "Memory usage on {{ $labels.instance }} is above 80% for 1 minute (current: {{ $value | humanize }}%)."
+
       # Any monitored target is down
       - alert: TargetDown
         expr: up == 0
@@ -128,4 +148,59 @@ groups:
         annotations:
           summary: "Disk predicted to fill within 24h on {{ $labels.instance }}"
           description: "Based on the last 6 hours of data, the root filesystem on {{ $labels.instance }} is predicted to run out of space within 24 hours."
+  - name: log_alerts
+    rules:
+      # Alert when Loki disk usage is high (monitoring VM root filesystem)
+      - alert: LokiHighDiskUsage
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"} / node_filesystem_size_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage on monitoring VM (Loki storage)"
+          description: "Root filesystem on monitoring VM (running Loki) is at {{ $value | humanize }}% usage."
+
+      # Critical disk usage alert for Loki storage
+      - alert: LokiCriticalDiskUsage
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"} / node_filesystem_size_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"}) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk usage on monitoring VM (Loki storage)"
+          description: "Root filesystem on monitoring VM (running Loki) is at {{ $value | humanize }}% usage. Immediate action required."
+
+      # Alert when log ingestion rate is abnormally low (possible pipeline failure)
+      # Metric name may need adjustment based on actual Loki metrics exposed
+      # Verify metric exists: loki_distributor_bytes_received_total (or loki_distributor_received_bytes_total)
+      # Integration tests verify Loki metrics availability; adjust threshold as needed.
+      # Threshold: 1024 bytes/sec (1 KB/sec). Adjust based on baseline ingestion.
+      - alert: LokiIngestionRateLow
+        expr: rate(loki_distributor_bytes_received_total[5m]) < 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Log ingestion rate low on {{ $labels.instance }}"
+          description: "Loki log ingestion rate has been below 1 KB/sec for 10 minutes (current: {{ $value | humanize }} bytes/sec). Check Promtail and log sources."
+
+      # Optional: Alert on high Loki request error rate (uncomment after verifying metric exists)
+      # - alert: LokiHighErrorRate
+      #   expr: rate(loki_request_duration_seconds_count{code=~"5.."}[5m]) / rate(loki_request_duration_seconds_count[5m]) > 0.05
+      #   for: 5m
+      #   labels:
+      #     severity: warning
+      #   annotations:
+      #     summary: "High error rate on Loki API"
+      #     description: "Loki HTTP error rate exceeds 5% (current: {{ $value | humanizePercentage }}). Check Loki logs."
+
+      # Predictive alert for Loki disk filling
+      - alert: LokiDiskFillingUp
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"}[6h], 24*3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki storage disk predicted to fill within 24h"
+          description: "Based on the last 6 hours of data, the root filesystem on monitoring VM (Loki storage) is predicted to run out of space within 24 hours."
 {% endraw %}

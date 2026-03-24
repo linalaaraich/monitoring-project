@@ -46,4 +46,12 @@
     owner: "472"
     group: "472"
     mode: "0644"
+  register: dashboards_deployed
+  notify: restart stack
+
+- name: Remove Grafana database to force dashboard re-provisioning
+  file:
+    path: "{{ grafana_data_dir }}/grafana.db"
+    state: absent
+  when: dashboards_deployed.changed
   notify: restart stack

@@ -11,11 +11,37 @@ processors:
     send_batch_size: 8192
     timeout: 5s
 
+  # Add service metadata for logs
+  resource:
+    attributes:
+      - action: insert
+        key: service.name
+        value: "otel-collector-cires"
+      - action: insert
+        key: job
+        value: "otel-collector"
+      - action: insert
+        key: deployment.environment
+        value: "cires"
+      - action: insert
+        key: loki.resource.labels
+        value: service.name, host.name, deployment.environment, job
+
 exporters:
   otlp/jaeger:
     endpoint: "jaeger:{{ jaeger_otlp_grpc_port }}"
     tls:
       insecure: true
+
+  # Loki HTTP exporter for logs (using Promtail push endpoint)
+  loki:
+    endpoint: "http://loki:{{ loki_port }}/loki/api/v1/push"
+    tls:
+      insecure: true
+
+  # Debug exporter for troubleshooting
+  debug:
+    verbosity: basic
 
 extensions:
   health_check:
@@ -31,5 +57,10 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [resource, batch]
       exporters: [otlp/jaeger]
+
+    logs:
+      receivers: [otlp]
+      processors: [resource, batch]
+      exporters: [loki, debug]

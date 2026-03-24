@@ -109,6 +109,16 @@ The project follows standard Ansible layout: `inventory/` (host IPs and group va
 
 ---
 
+## Integration Testing
+
+After deployment, run `ansible-playbook playbooks/integration.yml` to validate service health and observability data flows. The test performs:
+- Connectivity checks to all VMs
+- HTTP health checks for each service
+- Load generation via `load-test.sh`
+- Verification of traces in Jaeger, logs in Loki, and metrics in Prometheus
+
+---
+
 ## References
 
 - [Jaeger Documentation](https://www.jaegertracing.io/docs/latest/)
