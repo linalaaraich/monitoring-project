@@ -1713,8 +1713,8 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "sum by(job) (count_over_time({job=~\".+\"}[5m]))",
-          "legendFormat": "{{ job }}",
+          "expr": "sum by(service_name) (count_over_time({service_name=~\".+\"}[5m]))",
+          "legendFormat": "{{ service_name }}",
           "refId": "A"
         }
       ],
@@ -1779,7 +1779,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({job=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\"[5m])) or vector(0)",
+          "expr": "sum(count_over_time({service_name=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\"[5m])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -1818,7 +1818,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "{job=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\"",
+          "expr": "{service_name=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\"",
           "refId": "A"
         }
       ],

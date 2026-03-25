@@ -1,0 +1,23 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: gmail-smtp
+    receivers:
+      - uid: gmail-email
+        type: email
+        settings:
+          addresses: "{{ grafana_contact_email }}"
+          singleEmail: false
+        disableResolveMessage: false
+{% if grafana_contact_slack_webhook | default('') != '' %}
+      - uid: slack-webhook
+        type: slack
+        settings:
+          url: "{{ grafana_contact_slack_webhook }}"
+          title: |
+            {% raw %}{{ template "default.title" . }}{% endraw %}
+          text: |
+            {% raw %}{{ template "default.message" . }}{% endraw %}
+        disableResolveMessage: false
+{% endif %}

@@ -6,7 +6,7 @@ services:
     plugins:
       - name: opentelemetry
         config:
-          traces_endpoint: "http://{{ prometheus_host }}:4318/v1/traces"
+          traces_endpoint: "http://otel-collector:4318/v1/traces"
           header_type: w3c
           resource_attributes:
             service.name: "kong-gateway"
@@ -32,7 +32,7 @@ services:
     plugins:
       - name: opentelemetry
         config:
-          traces_endpoint: "http://{{ prometheus_host }}:4318/v1/traces"
+          traces_endpoint: "http://otel-collector:4318/v1/traces"
           header_type: w3c
           resource_attributes:
             service.name: "kong-gateway"

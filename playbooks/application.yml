@@ -13,7 +13,7 @@
   roles:
     - mysql
     - spring_backend
-    - promtail
+    - otel-collector
   tags: [application]
   tasks:
     - name: Create stack directory

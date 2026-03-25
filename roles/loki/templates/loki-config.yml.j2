@@ -2,6 +2,8 @@ auth_enabled: false
 
 server:
   http_listen_port: 3100
+  grpc_server_max_recv_msg_size: 16777216   # 16MB — default 4MB is too small for OTel log batches
+  grpc_server_max_send_msg_size: 16777216
 
 common:
   ring:

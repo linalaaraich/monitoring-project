@@ -1,3 +1,4 @@
+#jinja2: lstrip_blocks: True, trim_blocks: True
 receivers:
   otlp:
     protocols:
@@ -5,41 +6,61 @@ receivers:
         endpoint: "0.0.0.0:{{ otel_collector_grpc_port }}"
       http:
         endpoint: "0.0.0.0:{{ otel_collector_http_port }}"
+{% if 'network' in group_names %}
+  filelog/containers:
+    include: [/var/lib/docker/containers/**/*-json.log]
+    start_at: end
+    include_file_path: true
+    operators:
+      - type: json_parser
+        parse_from: body
+        parse_to: attributes
+      - type: move
+        from: attributes.log
+        to: body
+      - type: move
+        from: attributes.stream
+        to: attributes["log.iostream"]
+      - type: move
+        from: attributes.time
+        to: attributes["log.time"]
+      - type: filter
+        expr: 'body matches "otelcol\\\\.component" or body matches "fileconsumer" or body matches "node_exporter" or body matches "cadvisor"'
+      - type: add
+        field: resource["service.name"]
+        value: kong-gateway
+      - type: add
+        field: resource["host.name"]
+        value: {{ inventory_hostname }}
+{% endif %}
 
 processors:
   batch:
-    send_batch_size: 8192
+    send_batch_size: 200
+    send_batch_max_size: 200
     timeout: 5s
 
-  # Add service metadata for logs
   resource:
     attributes:
-      - action: insert
-        key: service.name
-        value: "otel-collector-cires"
-      - action: insert
-        key: job
-        value: "otel-collector"
       - action: insert
         key: deployment.environment
         value: "cires"
       - action: insert
         key: loki.resource.labels
-        value: service.name, host.name, deployment.environment, job
+        value: service.name, host.name, deployment.environment
+      - action: insert
+        key: loki.format
+        value: json
 
 exporters:
   otlp/jaeger:
-    endpoint: "jaeger:{{ jaeger_otlp_grpc_port }}"
+    endpoint: "{% if 'monitoring' in group_names %}jaeger:{{ jaeger_otlp_grpc_port }}{% else %}{{ prometheus_host }}:{{ jaeger_host_otlp_grpc_port }}{% endif %}"
     tls:
       insecure: true
 
-  # Loki HTTP exporter for logs (using Promtail push endpoint)
   loki:
-    endpoint: "http://loki:{{ loki_port }}/loki/api/v1/push"
-    tls:
-      insecure: true
+    endpoint: "http://{% if 'monitoring' in group_names %}loki:{{ loki_port }}{% else %}{{ prometheus_host }}:{{ loki_port }}{% endif %}/loki/api/v1/push"
 
-  # Debug exporter for troubleshooting
   debug:
     verbosity: basic
 
@@ -52,6 +73,8 @@ extensions:
 service:
   extensions: [health_check, zpages]
   telemetry:
+    logs:
+      level: warn
     metrics:
       address: "0.0.0.0:{{ otel_collector_metrics_port }}"
   pipelines:
@@ -61,6 +84,6 @@ service:
       exporters: [otlp/jaeger]
 
     logs:
-      receivers: [otlp]
+      receivers: [otlp{% if 'network' in group_names %}, filelog/containers{% endif %}]
       processors: [resource, batch]
-      exporters: [loki, debug]
+      exporters: [loki]

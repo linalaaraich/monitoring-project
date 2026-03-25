@@ -18,10 +18,9 @@ datasources:
     jsonData:
       derivedFields:
         - datasourceUid: jaeger
-          matcherRegex: "" # Use labelName instead
+          matcherRegex: '"trace_?id":\\s*"([a-f0-9]{32})"'
           name: TraceID
-          labelName: trace_id
-          url: 'http://jaeger:{{ jaeger_port_ui }}/trace/$${__value.raw}'
+          url: '${__value.raw}'
 
   - name: Alertmanager
     type: alertmanager
@@ -49,8 +48,10 @@ datasources:
         datasourceUid: loki
         spanStartTimeShift: "-1h"
         spanEndTimeShift: "1h"
-        filterByTraceID: true
+        filterByTraceID: false
         filterBySpanID: false
+        customQuery: true
+        query: '{service_name="${__span.tags["service.name"]}"} |= "${__span.traceId}"'
         tags:
           - key: service.name
             value: service

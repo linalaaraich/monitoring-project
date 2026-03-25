@@ -9,6 +9,14 @@ alertmanager_smtp_from: "laaraichlina@gmail.com"
 alertmanager_smtp_username: "laaraichlina@gmail.com"
 alertmanager_smtp_password: "{{ lookup('env', 'ALERTMANAGER_SMTP_PASSWORD') }}"
 alertmanager_receiver_email: "laaraichlina@gmail.com"
+
+# Grafana SMTP config — reuses the same Gmail App Password as Alertmanager
+# This enables Grafana's built-in email for contact points (Unified Alerting)
+grafana_smtp_host: "smtp.gmail.com:587"
+grafana_smtp_user: "laaraichlina@gmail.com"
+grafana_smtp_password: "{{ lookup('env', 'ALERTMANAGER_SMTP_PASSWORD') }}"
+grafana_smtp_from: "laaraichlina@gmail.com"
+grafana_contact_email: "laaraichlina@gmail.com"
 loki_port: 3100
 jaeger_port_ui: 16686
 jaeger_port_collector: 4317

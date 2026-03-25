@@ -89,6 +89,13 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_UNIFIED_ALERTING_ENABLED: "true"
       GF_ALERTING_ENABLED: "false"
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: "{{ grafana_smtp_host }}"
+      GF_SMTP_USER: "{{ grafana_smtp_user }}"
+      GF_SMTP_PASSWORD: "{{ grafana_smtp_password }}"
+      GF_SMTP_FROM_ADDRESS: "{{ grafana_smtp_from }}"
+      GF_SMTP_FROM_NAME: "Grafana CIRES"
+      GF_SMTP_STARTTLS_POLICY: "MandatoryStartTLS"
     volumes:
       - {{ grafana_data_dir }}:/var/lib/grafana
       - {{ grafana_provisioning_dir }}:/etc/grafana/provisioning:ro

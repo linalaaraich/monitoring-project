@@ -12,7 +12,7 @@
   hosts: network
   roles:
     - kong
-    - promtail
+    - otel-collector
   tags: [network]
   tasks:
     - name: Create stack directory

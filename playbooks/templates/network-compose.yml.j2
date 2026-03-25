@@ -29,16 +29,22 @@ services:
       timeout: 5s
       retries: 5
 
-  promtail:
-    image: grafana/promtail:{{ promtail_version }}
-    container_name: promtail
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:{{ otel_collector_version }}
+    container_name: otel-collector
     restart: unless-stopped
+    user: "0:0"
+    command: ["--config=/etc/otel/config.yaml"]
     ports:
-      - "{{ promtail_http_port }}:9080"
+      - "{{ otel_collector_grpc_port }}:4317"
+      - "{{ otel_collector_http_port }}:4318"
+      - "{{ otel_collector_metrics_port }}:8888"
+      - "{{ otel_collector_health_port }}:13133"
     volumes:
-      - {{ promtail_config_dir }}/promtail-config.yml:/etc/promtail/config.yml:ro
+      - {{ otel_collector_config_dir }}/config.yaml:/etc/otel/config.yaml:ro
       - /var/log:/var/log:ro
-    command: -config.file=/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -66,7 +72,6 @@ services:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
     privileged: true
     devices:

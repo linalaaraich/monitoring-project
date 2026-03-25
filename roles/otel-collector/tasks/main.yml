@@ -13,3 +13,11 @@
     dest: "{{ otel_collector_config_dir }}/config.yaml"
     mode: "0644"
   notify: restart stack
+
+- name: Copy OTel config to stack directory for Docker bind mount
+  copy:
+    src: "{{ otel_collector_config_dir }}/config.yaml"
+    dest: "{{ stack_dir }}/otel-config.yaml"
+    remote_src: yes
+    mode: "0644"
+  notify: restart stack

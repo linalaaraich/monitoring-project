@@ -6,7 +6,6 @@ kong_config_file: /etc/kong/kong.yml
 app_backend_host: "192.168.127.30"
 app_backend_port: 8080
 app_frontend_port: 80
-promtail_port: 9080
 kong_log_path: "/var/log/kong/*.log"
 
 kong_plugins:

@@ -12,6 +12,7 @@
     - "{{ grafana_provisioning_dir }}"
     - "{{ grafana_provisioning_dir }}/datasources"
     - "{{ grafana_provisioning_dir }}/dashboards"
+    - "{{ grafana_provisioning_dir }}/alerting"
 
 - name: Deploy Grafana datasource provisioning
   template:
@@ -26,6 +27,24 @@
   template:
     src: dashboard-provider.yml.j2
     dest: "{{ grafana_provisioning_dir }}/dashboards/provider.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  notify: restart stack
+
+- name: Deploy Grafana alerting contact points provisioning
+  template:
+    src: contactpoints.yml.j2
+    dest: "{{ grafana_provisioning_dir }}/alerting/contactpoints.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  notify: restart stack
+
+- name: Deploy Grafana notification policies provisioning
+  template:
+    src: policies.yml.j2
+    dest: "{{ grafana_provisioning_dir }}/alerting/policies.yml"
     owner: "472"
     group: "472"
     mode: "0644"

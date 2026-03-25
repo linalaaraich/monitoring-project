@@ -115,14 +115,10 @@
 
     - name: Verify Loki has logs with trace_id
       ansible.builtin.uri:
-        url: "http://{{ monitoring_ip }}:3100/loki/api/v1/query"
+        url: "http://{{ monitoring_ip }}:3100/loki/api/v1/query?query=%7Bservice_name%3D~%22.%2B%22%7D&limit=5"
         method: GET
-        url_username: ""
-        url_password: ""
-        body_format: json
         return_content: yes
         status_code: 200
-        validate_certs: false
       ignore_errors: yes
       register: loki_query
       tags: [verification, logs]
@@ -134,15 +130,10 @@
 
     - name: Verify Prometheus has metrics for Kong requests
       ansible.builtin.uri:
-        url: "http://{{ monitoring_ip }}:9090/api/v1/query"
+        url: "http://{{ monitoring_ip }}:9090/api/v1/query?query=kong_http_requests_total"
         method: GET
-        body_format: json
         return_content: yes
         status_code: 200
-        validate_certs: false
-        url_username: ""
-        url_password: ""
-        body: '{"query": "kong_http_requests_total"}'
       register: prometheus_query
       ignore_errors: yes
       tags: [verification, metrics]
@@ -154,15 +145,10 @@
 
     - name: Verify Loki metrics target is up
       ansible.builtin.uri:
-        url: "http://{{ monitoring_ip }}:9090/api/v1/query"
+        url: "http://{{ monitoring_ip }}:9090/api/v1/query?query=up%7Bjob%3D%22loki%22%7D"
         method: GET
-        body_format: json
         return_content: yes
         status_code: 200
-        validate_certs: false
-        url_username: ""
-        url_password: ""
-        body: '{"query": "up{job=\"loki\"}"}'
       register: loki_up_query
       ignore_errors: yes
       tags: [verification, metrics]
@@ -170,20 +156,15 @@
     - name: Display Loki target status
       ansible.builtin.debug:
         msg: "Loki scrape target up status: {{ loki_up_query.json.data.result[0].value[1] | default('unknown') }}"
-      when: loki_up_query.json.data.result | length > 0
+      when: loki_up_query.json is defined and loki_up_query.json.data is defined and loki_up_query.json.data.result | length > 0
       tags: [verification, metrics]
 
     - name: Verify Loki build info metric exists
       ansible.builtin.uri:
-        url: "http://{{ monitoring_ip }}:9090/api/v1/query"
+        url: "http://{{ monitoring_ip }}:9090/api/v1/query?query=loki_build_info"
         method: GET
-        body_format: json
         return_content: yes
         status_code: 200
-        validate_certs: false
-        url_username: ""
-        url_password: ""
-        body: '{"query": "loki_build_info"}'
       register: loki_build_info_query
       ignore_errors: yes
       tags: [verification, metrics]
@@ -196,15 +177,10 @@
 
     - name: Verify Loki distributor bytes received metric exists
       ansible.builtin.uri:
-        url: "http://{{ monitoring_ip }}:9090/api/v1/query"
+        url: "http://{{ monitoring_ip }}:9090/api/v1/query?query=loki_distributor_bytes_received_total"
         method: GET
-        body_format: json
         return_content: yes
         status_code: 200
-        validate_certs: false
-        url_username: ""
-        url_password: ""
-        body: '{"query": "loki_distributor_bytes_received_total"}'
       register: loki_distributor_query
       ignore_errors: yes
       tags: [verification, metrics]
@@ -217,15 +193,10 @@
 
     - name: List all Loki metrics for verification
       ansible.builtin.uri:
-        url: "http://{{ monitoring_ip }}:9090/api/v1/query"
+        url: "http://{{ monitoring_ip }}:9090/api/v1/query?query=%7B__name__%3D~%22loki_.%2A%22%7D"
         method: GET
-        body_format: json
         return_content: yes
         status_code: 200
-        validate_certs: false
-        url_username: ""
-        url_password: ""
-        body: '{"query": "{__name__=~\\"loki_.*\\"}"}'
       register: loki_all_metrics_query
       ignore_errors: yes
       tags: [verification, metrics]
