@@ -182,7 +182,7 @@ groups:
           severity: warning
         annotations:
           summary: "Log ingestion rate low on {{ $labels.instance }}"
-          description: "Loki log ingestion rate has been below 1 KB/sec for 10 minutes (current: {{ $value | humanize }} bytes/sec). Check Promtail and log sources."
+          description: "Loki log ingestion rate has been below 1 KB/sec for 10 minutes (current: {{ $value | humanize }} bytes/sec). Check OTel Collector log pipelines on application-vm and network-vm."
 
       # Optional: Alert on high Loki request error rate (uncomment after verifying metric exists)
       # - alert: LokiHighErrorRate
