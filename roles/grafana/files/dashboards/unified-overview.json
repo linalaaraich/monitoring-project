@@ -1806,9 +1806,9 @@
         "dedupStrategy": "none",
         "enableInfiniteScrolling": false,
         "enableLogDetails": true,
-        "prettifyLogMessage": false,
+        "prettifyLogMessage": true,
         "showCommonLabels": false,
-        "showControls": false,
+        "showControls": true,
         "showLabels": true,
         "showTime": true,
         "sortOrder": "Descending",
@@ -1818,11 +1818,58 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "{service_name=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\"",
+          "expr": "{service_name=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\" | json",
           "refId": "A"
         }
       ],
       "title": "Recent Error Logs",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "id": 40,
+      "options": {
+        "dedupStrategy": "none",
+        "enableInfiniteScrolling": true,
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showControls": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "unwrappedColumns": false,
+        "wrapLogMessage": true,
+        "displayedFields": [
+          "body",
+          "traceid",
+          "spanid",
+          "severity"
+        ]
+      },
+      "pluginVersion": "12.4.1",
+      "targets": [
+        {
+          "expr": "{service_name=~\".+\"} | json | traceid != `` | line_format \"{{.body}}\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Application Logs with Trace Context",
+      "description": "Shows only logs that have trace correlation (traceid is not empty). Click a log line and expand details to see the TraceID link to Jaeger.",
       "type": "logs"
     },
     {
@@ -1831,7 +1878,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 69
       },
       "id": 27,
       "panels": [],
@@ -1920,7 +1967,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 70
       },
       "id": 28,
       "options": {
@@ -2003,7 +2050,7 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 70
       },
       "id": 29,
       "options": {
@@ -2068,7 +2115,7 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 62
+        "y": 74
       },
       "id": 30,
       "options": {
@@ -2110,7 +2157,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 78
       },
       "id": 31,
       "options": {

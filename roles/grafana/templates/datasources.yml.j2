@@ -18,9 +18,12 @@ datasources:
     jsonData:
       derivedFields:
         - datasourceUid: jaeger
-          matcherRegex: '"trace_?id":\\s*"([a-f0-9]{32})"'
+          matcherType: label
+          matcherRegex: traceid
           name: TraceID
           url: '${__value.raw}'
+          urlDisplayLabel: View Trace
+          openInNewTab: true
 
   - name: Alertmanager
     type: alertmanager
