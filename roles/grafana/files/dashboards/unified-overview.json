@@ -1779,7 +1779,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "sum(count_over_time({service_name=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\"[5m])) or vector(0)",
+          "expr": "sum(count_over_time({service_name=~\".+\"} |~ \"(?i)(error|exception|fatal|panic)\" | json[5m])) or vector(0)",
           "refId": "A"
         }
       ],
@@ -2218,6 +2218,59 @@
       ],
       "title": "Service Dependency Map",
       "type": "nodeGraph"
+    },
+    {
+      "datasource": {
+        "type": "jaeger",
+        "uid": "jaeger"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View in Jaeger",
+                    "url": "http://192.168.127.10:16686/trace/${__value.raw}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 88
+      },
+      "id": 50,
+      "options": {},
+      "pluginVersion": "12.4.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "jaeger",
+            "uid": "jaeger"
+          },
+          "queryType": "search",
+          "refId": "A",
+          "service": "react-springboot-app",
+          "limit": 20
+        }
+      ],
+      "title": "Recent Traces",
+      "description": "Click a Trace ID to view it in the Jaeger UI",
+      "type": "table"
     }
   ],
   "preload": false,
