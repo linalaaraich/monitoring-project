@@ -17,12 +17,11 @@ datasources:
     uid: loki
     jsonData:
       derivedFields:
-        - datasourceUid: jaeger
-          matcherType: label
+        - matcherType: label
           matcherRegex: traceid
           name: TraceID
-          url: '${__value.raw}'
-          urlDisplayLabel: View Trace
+          url: 'http://192.168.127.10:16686/trace/$${__value.raw}'
+          urlDisplayLabel: View in Jaeger
           openInNewTab: true
 
   - name: Alertmanager

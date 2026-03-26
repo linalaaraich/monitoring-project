@@ -1793,7 +1793,26 @@
       },
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "traceid"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View in Jaeger",
+                    "url": "http://192.168.127.10:16686/trace/${__value.raw}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 10,
@@ -1813,7 +1832,12 @@
         "showTime": true,
         "sortOrder": "Descending",
         "unwrappedColumns": false,
-        "wrapLogMessage": true
+        "wrapLogMessage": true,
+        "displayedFields": [
+          "body",
+          "traceid",
+          "severity"
+        ]
       },
       "pluginVersion": "12.4.1",
       "targets": [
@@ -1832,7 +1856,26 @@
       },
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "traceid"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View in Jaeger",
+                    "url": "http://192.168.127.10:16686/trace/${__value.raw}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 12,
@@ -1868,8 +1911,8 @@
           "refId": "A"
         }
       ],
-      "title": "Application Logs with Trace Context",
-      "description": "Shows only logs that have trace correlation (traceid is not empty). Click a log line and expand details to see the TraceID link to Jaeger.",
+      "title": "Application Logs",
+      "description": "",
       "type": "logs"
     },
     {
