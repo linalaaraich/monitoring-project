@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprint 2 Backlog — Observability Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #1e2130;
+    --border: #2a2d3a;
+    --text: #e0e0e0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  /* Nav */
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 32px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topbar-left { display:flex; align-items:center; gap:16px; }
+  .back-link { color:var(--muted); text-decoration:none; font-size:13px; display:flex; align-items:center; gap:6px; transition:color .2s; }
+  .back-link:hover { color:var(--text); }
+  .topbar h1 { font-size:16px; font-weight:700; }
+  .sprint-badge { background:rgba(78,168,222,.15); color:var(--accent-blue); padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; border:1px solid rgba(78,168,222,.3); }
+  .deadline-badge { background:rgba(240,160,80,.12); color:var(--accent-orange); padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; border:1px solid rgba(240,160,80,.3); }
+  .priority-high { background:rgba(176,126,232,.12); color:var(--accent-purple); padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; border:1px solid rgba(176,126,232,.3); }
+  .priority-med { background:rgba(64,208,208,.12); color:var(--accent-cyan); padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; border:1px solid rgba(64,208,208,.3); }
+
+  /* Tabs */
+  .tabs { display:flex; border-bottom:2px solid var(--border); padding:0 32px; background:#13151e; gap:4px; }
+  .tab { padding:13px 22px; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; letter-spacing:.3px; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  /* Content wrapper */
+  .content { padding:32px; max-width:1400px; margin:0 auto; }
+
+  /* Stats row */
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px; margin-bottom:32px; }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+  .stat-card .stat-val { font-size:26px; font-weight:700; margin-bottom:4px; }
+  .stat-card .stat-label { font-size:12px; color:var(--muted); font-weight:500; }
+
+  /* Epic header */
+  .epic-header { display:flex; align-items:center; gap:14px; margin-bottom:20px; padding:20px 24px; background:var(--card); border:1px solid var(--border); border-radius:12px; }
+  .epic-icon { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .epic-header h2 { font-size:17px; font-weight:700; margin-bottom:3px; }
+  .epic-header p { font-size:13px; color:var(--muted); line-height:1.5; }
+  .epic-meta { margin-left:auto; text-align:right; flex-shrink:0; }
+  .epic-meta .pts { font-size:22px; font-weight:700; }
+  .epic-meta .pts-label { font-size:11px; color:var(--muted); }
+
+  /* Story cards */
+  .stories-grid { display:flex; flex-direction:column; gap:12px; margin-bottom:40px; }
+  .story-card {
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:18px 20px; display:grid;
+    grid-template-columns: 56px 1fr auto;
+    gap:16px; align-items:start;
+    transition:transform .15s, box-shadow .15s, border-color .2s;
+  }
+  .story-card:hover { transform:translateY(-1px); box-shadow:0 4px 16px rgba(0,0,0,.3); border-color:#3a3d4a; }
+  .story-id { font-family:'JetBrains Mono','Fira Code',monospace; font-size:11px; color:var(--muted); padding-top:2px; }
+  .story-body {}
+  .story-title { font-size:14px; font-weight:600; margin-bottom:6px; line-height:1.4; }
+  .story-as { font-size:12px; color:var(--accent-blue); margin-bottom:6px; font-style:italic; }
+  .story-desc { font-size:12px; color:var(--muted); line-height:1.6; margin-bottom:10px; }
+  .story-tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .tag { font-size:11px; padding:2px 8px; border-radius:4px; font-weight:600; }
+  .tag-must { background:rgba(224,96,112,.15); color:var(--accent-red); border:1px solid rgba(224,96,112,.25); }
+  .tag-should { background:rgba(240,160,80,.12); color:var(--accent-orange); border:1px solid rgba(240,160,80,.25); }
+  .tag-could { background:rgba(136,144,160,.1); color:var(--muted); border:1px solid rgba(136,144,160,.2); }
+  .tag-infra { background:rgba(78,168,222,.1); color:var(--accent-blue); border:1px solid rgba(78,168,222,.2); }
+  .tag-ai { background:rgba(176,126,232,.1); color:var(--accent-purple); border:1px solid rgba(176,126,232,.2); }
+  .tag-k8s { background:rgba(64,208,208,.1); color:var(--accent-cyan); border:1px solid rgba(64,208,208,.2); }
+  .tag-docker { background:rgba(78,168,222,.1); color:var(--accent-blue); border:1px solid rgba(78,168,222,.2); }
+  .tag-tf { background:rgba(107,207,127,.1); color:var(--accent-green); border:1px solid rgba(107,207,127,.2); }
+  .tag-security { background:rgba(224,208,96,.1); color:var(--accent-yellow); border:1px solid rgba(224,208,96,.2); }
+  .story-meta { text-align:right; display:flex; flex-direction:column; gap:8px; align-items:flex-end; min-width:80px; }
+  .pts-badge { font-size:18px; font-weight:700; }
+  .pts-badge small { font-size:10px; color:var(--muted); font-weight:500; display:block; }
+  .time-badge { font-size:11px; color:var(--muted); background:rgba(255,255,255,.05); padding:3px 8px; border-radius:4px; white-space:nowrap; }
+  .blocker-badge { font-size:10px; color:var(--accent-red); background:rgba(224,96,112,.1); padding:2px 7px; border-radius:4px; border:1px solid rgba(224,96,112,.2); }
+
+  /* Section divider */
+  .section-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:32px 0 14px; display:flex; align-items:center; gap:10px; }
+  .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* Timeline tab */
+  .timeline-wrap { padding:32px; max-width:1000px; margin:0 auto; }
+  .week-block { margin-bottom:40px; }
+  .week-title { font-size:15px; font-weight:700; margin-bottom:4px; }
+  .week-subtitle { font-size:12px; color:var(--muted); margin-bottom:20px; }
+  .week-track { display:grid; grid-template-columns:120px 1fr; gap:0; }
+  .track-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:12px 16px 12px 0; border-right:2px solid var(--border); text-align:right; display:flex; align-items:center; justify-content:flex-end; }
+  .track-items { padding:8px 0 8px 20px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:6px; }
+  .track-items:last-child { border-bottom:none; }
+  .track-row { display:grid; grid-template-columns:120px 1fr; gap:0; }
+  .track-row:last-child .track-items { border-bottom:none; }
+  .day-item { font-size:13px; padding:6px 10px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; }
+  .day-item .item-name { flex:1; }
+  .day-item .item-time { font-size:11px; color:var(--muted); white-space:nowrap; margin-left:10px; }
+  .day-item.infra { background:rgba(78,168,222,.08); border-left:3px solid var(--accent-blue); }
+  .day-item.k8s { background:rgba(64,208,208,.08); border-left:3px solid var(--accent-cyan); }
+  .day-item.ai { background:rgba(176,126,232,.08); border-left:3px solid var(--accent-purple); }
+  .day-item.tf { background:rgba(107,207,127,.08); border-left:3px solid var(--accent-green); }
+  .day-item.security { background:rgba(224,208,96,.08); border-left:3px solid var(--accent-yellow); }
+  .day-item.milestone { background:rgba(240,160,80,.12); border-left:3px solid var(--accent-orange); font-weight:600; }
+
+  .risk-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+  .risk-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; }
+  .risk-card h4 { font-size:13px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+  .risk-card ul { list-style:none; display:flex; flex-direction:column; gap:7px; }
+  .risk-card li { font-size:12px; color:var(--muted); padding-left:14px; position:relative; line-height:1.5; }
+  .risk-card li::before { content:'\25B8'; position:absolute; left:0; color:var(--accent-orange); font-size:10px; top:1px; }
+  .risk-card li strong { color:var(--text); }
+
+  .mvp-box { background:rgba(107,207,127,.06); border:1px solid rgba(107,207,127,.25); border-radius:10px; padding:20px 24px; margin-bottom:28px; }
+  .mvp-box h3 { font-size:14px; font-weight:700; color:var(--accent-green); margin-bottom:8px; }
+  .mvp-box p { font-size:13px; color:var(--muted); line-height:1.6; }
+  .mvp-box ul { margin-top:10px; padding-left:18px; display:flex; flex-direction:column; gap:5px; }
+  .mvp-box li { font-size:13px; color:var(--muted); line-height:1.5; }
+  .mvp-box li strong { color:var(--text); }
+
+  .note-box { background:rgba(78,168,222,.06); border:1px solid rgba(78,168,222,.2); border-radius:8px; padding:14px 18px; margin-bottom:24px; font-size:12px; color:var(--muted); line-height:1.6; }
+  .note-box strong { color:var(--accent-blue); }
+
+  .note-box.warn { background:rgba(240,160,80,.06); border:1px solid rgba(240,160,80,.2); }
+  .note-box.warn strong { color:var(--accent-orange); }
+
+  /* Responsive */
+  @media(max-width:700px) {
+    .story-card { grid-template-columns:1fr; }
+    .story-id { display:none; }
+    .story-meta { flex-direction:row; align-items:center; text-align:left; }
+    .risk-grid { grid-template-columns:1fr; }
+    .stats-row { grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="index.html" class="back-link">&larr; Back to Index</a>
+    <span style="color:var(--border)">|</span>
+    <h1>Sprint 2 Backlog</h1>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="sprint-badge">Sprint 2</span>
+    <span class="deadline-badge">Due: 9 April 2026</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('epic1')">Epic 1 &mdash; AWS Demo Env</div>
+  <div class="tab" onclick="switchTab('epic2')">Epic 2 &mdash; AI RCA (MVP)</div>
+  <div class="tab" onclick="switchTab('timeline')">Timeline &amp; Risks</div>
+</div>
+
+<!-- =========================================================== OVERVIEW -->
+<div id="tab-overview" class="tab-content active">
+<div class="content">
+
+  <div class="mvp-box">
+    <h3>MVP Definition &mdash; what "done" looks like on April 9th</h3>
+    <p>The AI RCA pipeline is the primary deliverable. The AWS demo environment supports it.</p>
+    <ul>
+      <li><strong>Primary (Must):</strong> Alert fires &rarr; LLM Triage Service receives webhook &rarr; gathers context from Prometheus + Loki &rarr; self-hosted Ollama produces RCA &rarr; ESCALATE sends email with root cause analysis. 5-min timeout fallback never drops an alert.</li>
+      <li><strong>Supporting (Must):</strong> Full observability stack running on AWS EC2 (reusing existing docker-compose &amp; Ansible). Reachable, scraping, dashboards green.</li>
+    </ul>
+  </div>
+
+  <div class="note-box warn">
+    <strong>Infrastructure note:</strong> AWS is for demo/development only. Production deployment will be on CIRES private cloud infrastructure. No Kubernetes or Terraform in this sprint &mdash; we reuse the existing Ansible + docker-compose setup on EC2 instances. K8s migration is deferred to a future sprint.
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--accent-blue)">2</div>
+      <div class="stat-label">Epics</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--accent-purple)">17</div>
+      <div class="stat-label">User Stories</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--accent-orange)">73</div>
+      <div class="stat-label">Story Points</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--accent-green)">~12</div>
+      <div class="stat-label">Person-days</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--accent-cyan)">14</div>
+      <div class="stat-label">Calendar Days</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--accent-purple)">AI RCA</div>
+      <div class="stat-label">Top Priority</div>
+    </div>
+  </div>
+
+  <div class="note-box">
+    <strong>Strategy:</strong> Epic 1 (AWS setup) is lightweight &mdash; just provision EC2, run existing Ansible playbooks, and add an AI/LLM VM. Should take 2&ndash;3 days. The remaining 11 days are dedicated to Epic 2 (AI RCA), which is the core deliverable. One person can handle both sequentially, or split across team members for faster delivery.
+  </div>
+
+  <div class="section-label">Epic Summary</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px;">
+    <div class="epic-header" style="border-color:rgba(78,168,222,.3);cursor:pointer;" onclick="switchTab('epic1')">
+      <div class="epic-icon" style="background:rgba(78,168,222,.1);">&#9729;</div>
+      <div>
+        <h2 style="color:var(--accent-blue)">Epic 1 &mdash; AWS Demo Environment</h2>
+        <p>Provision EC2 instances, deploy existing observability stack via Ansible + docker-compose. Add GPU instance for Ollama. No K8s, no Terraform &mdash; just cloud VMs.</p>
+      </div>
+      <div class="epic-meta">
+        <div class="pts" style="color:var(--accent-blue)">20</div>
+        <div class="pts-label">story points</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">&asymp; 3 person-days</div>
+      </div>
+    </div>
+    <div class="epic-header" style="border-color:rgba(176,126,232,.3);cursor:pointer;" onclick="switchTab('epic2')">
+      <div class="epic-icon" style="background:rgba(176,126,232,.1);">&#129302;</div>
+      <div>
+        <h2 style="color:var(--accent-purple)">Epic 2 &mdash; AI RCA System (MVP)</h2>
+        <p>Alertmanager webhook, FastAPI Triage Service, Ollama, Prometheus + Loki context gathering. ESCALATE/DISMISS pipeline with email notification and timeout fallback.</p>
+      </div>
+      <div class="epic-meta">
+        <div class="pts" style="color:var(--accent-purple)">53</div>
+        <div class="pts-label">story points</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">&asymp; 9 person-days</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">Out of Scope &mdash; Future Sprints</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Kubernetes Migration</div>
+      <div style="font-size:11px;color:var(--muted);">EKS, K8s manifests, Helm charts. Medium priority &mdash; deferred until AI RCA is proven.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Terraform IaC</div>
+      <div style="font-size:11px;color:var(--muted);">Infrastructure as Code for AWS/private cloud. Will be needed for production but not for demo.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Drain3 Anomaly Detector</div>
+      <div style="font-size:11px;color:var(--muted);">Unsupervised log anomaly detection. Requires stable Loki integration first.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Jaeger MCP + System Metadata MCP</div>
+      <div style="font-size:11px;color:var(--muted);">Lower ROI for initial RCA. Prometheus + Loki context covers 80% of signal.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">WATCH State Re-checker</div>
+      <div style="font-size:11px;color:var(--muted);">Persistent WATCH queue with APScheduler. Needs stable triage service first.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Private Cloud Migration</div>
+      <div style="font-size:11px;color:var(--muted);">Move from AWS demo to CIRES private cloud. Same Ansible playbooks, new inventory.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- =========================================================== EPIC 1 -->
+<div id="tab-epic1" class="tab-content">
+<div class="content">
+
+  <div class="epic-header" style="border-color:rgba(78,168,222,.3);margin-bottom:28px;">
+    <div class="epic-icon" style="background:rgba(78,168,222,.1);font-size:22px;">&#9729;</div>
+    <div>
+      <h2 style="color:var(--accent-blue)">Epic 1 &mdash; AWS Demo Environment</h2>
+      <p>Provision EC2 instances matching the local 3-VM layout, plus a GPU instance for Ollama. Deploy using existing Ansible playbooks and docker-compose templates. No new tooling &mdash; just cloud VMs.</p>
+    </div>
+    <div class="epic-meta">
+      <div class="pts" style="color:var(--accent-blue)">20 pts</div>
+      <div class="pts-label">&asymp; 3 person-days</div>
+    </div>
+  </div>
+
+  <div class="note-box">
+    <strong>Approach:</strong> We already have working Ansible playbooks and docker-compose templates for 3 VMs. The cloud migration is just: provision EC2 instances, update the Ansible inventory with new IPs, run the playbooks. The only new work is adding a 4th VM (GPU) for Ollama and the AI triage service.
+  </div>
+
+  <div class="section-label">AWS Account &amp; Security</div>
+  <div class="stories-grid">
+
+    <div class="story-card">
+      <div class="story-id">E1-01</div>
+      <div class="story-body">
+        <div class="story-as">As a team member, I can authenticate to AWS with scoped IAM credentials so that I have least-privilege access.</div>
+        <div class="story-title">AWS account setup, IAM users, billing alerts</div>
+        <div class="story-desc">Supervisor creates AWS account. Create IAM users per team member with MFA. Set billing alerts at $100, $200, $300 thresholds. Tag all resources with project:observability-rca. Generate SSH key pairs for EC2 access.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-security">Security</span>
+          <span class="tag tag-infra">AWS</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-blue)">2<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+        <div class="blocker-badge">blocks all</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section-label">EC2 Provisioning</div>
+  <div class="stories-grid">
+
+    <div class="story-card">
+      <div class="story-id">E1-02</div>
+      <div class="story-body">
+        <div class="story-as">As an operator, I can SSH into 4 EC2 instances that mirror our local VM layout so that the existing Ansible playbooks work with minimal changes.</div>
+        <div class="story-title">Provision 4 EC2 instances: monitoring, application, network, AI/LLM</div>
+        <div class="story-desc">Launch in eu-west-3 (Paris). Monitoring: t3.large (8 GB). Application: t3.medium (4 GB). Network: t3.small (2 GB). AI/LLM: g4dn.xlarge (16 GB + T4 GPU). All in same VPC/subnet. Security groups: allow SSH from team IPs, inter-VM traffic, Grafana (3000) and Kong (8000) from team IPs. EBS: gp3 volumes (50/30/20/50 GB). Create start/stop scripts or Lambda for GPU instance scheduling (work hours only).</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-infra">AWS</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-blue)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+        <div class="blocker-badge">blocks E1-03</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E1-03</div>
+      <div class="story-body">
+        <div class="story-as">As an operator, I can run <code>ansible-playbook playbooks/site.yml</code> against the AWS instances so that the full observability stack deploys exactly as it does locally.</div>
+        <div class="story-title">Update Ansible inventory + deploy existing stack to EC2</div>
+        <div class="story-desc">Update inventory/production.yml with EC2 private IPs. Update group_vars/all.yml endpoints (loki_push_endpoint, jaeger_endpoint, prometheus_host). Copy SSH key. Run playbooks/site.yml. Verify all docker-compose services start. Prometheus targets all UP. Grafana dashboards show data. Loki receives logs. Jaeger receives traces.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-infra">Ansible</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-blue)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section-label">AI/LLM VM Setup</div>
+  <div class="stories-grid">
+
+    <div class="story-card">
+      <div class="story-id">E1-04</div>
+      <div class="story-body">
+        <div class="story-as">As a developer, I can query Ollama at <code>http://&lt;ai-vm&gt;:11434</code> so that LLM inference is available for the triage service.</div>
+        <div class="story-title">Install Ollama + NVIDIA drivers on GPU instance, pull model</div>
+        <div class="story-desc">Install NVIDIA drivers + CUDA toolkit on the g4dn.xlarge. Install Ollama. Pull llama3.1:8b (or mistral:7b) during provisioning &mdash; not at runtime. Verify GPU is detected (nvidia-smi). Test with a curl query. Expose port 11434. Create an Ansible role (ollama) for repeatable setup. Consider pulling a quantized (Q4) model variant for faster inference on T4.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">LLM</span>
+          <span class="tag tag-infra">GPU</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-blue)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+        <div class="blocker-badge">blocks E2-07</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E1-05</div>
+      <div class="story-body">
+        <div class="story-as">As a developer, I can open Grafana on the AWS monitoring VM and see all dashboards with live data so that the demo environment is validated.</div>
+        <div class="story-title">End-to-end cloud validation: all services healthy, dashboards live</div>
+        <div class="story-desc">Prometheus targets page: all UP. Grafana unified-overview dashboard: metrics flowing. Loki: logs from Spring Boot and Kong. Jaeger: traces via OTel Collector. Ollama: responds to queries. Run load-test.sh against Kong on network VM. Verify all three pillars populate. This is the Epic 1 completion gate.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-infra">Validation</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-blue)">3<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+        <div class="blocker-badge">milestone</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+<!-- =========================================================== EPIC 2 -->
+<div id="tab-epic2" class="tab-content">
+<div class="content">
+
+  <div class="epic-header" style="border-color:rgba(176,126,232,.3);margin-bottom:28px;">
+    <div class="epic-icon" style="background:rgba(176,126,232,.1);font-size:22px;">&#129302;</div>
+    <div>
+      <h2 style="color:var(--accent-purple)">Epic 2 &mdash; AI RCA System (Sprint 2 MVP)</h2>
+      <p>Alert fires &rarr; FastAPI triage service receives webhook &rarr; gathers context from Prometheus + Loki &rarr; Ollama reasons over context &rarr; ESCALATE/DISMISS decision. Email on ESCALATE. 5-min timeout fallback. All self-hosted, no external APIs.</p>
+    </div>
+    <div class="epic-meta">
+      <div class="pts" style="color:var(--accent-purple)">53 pts</div>
+      <div class="pts-label">&asymp; 9 person-days</div>
+    </div>
+  </div>
+
+  <div class="note-box">
+    <strong>Self-hosted LLM requirement:</strong> CIRES handles sensitive data &mdash; all LLM inference must run on our own infrastructure. Ollama with <code>llama3.1:8b</code> on the GPU instance. No calls to OpenAI, Anthropic, or any external API. The triage service, Ollama, and context gatherers all run as Docker containers on the AI/LLM VM.
+  </div>
+
+  <!-- Sub-epic: Alerting -->
+  <div class="section-label">Track B1 &mdash; Alert Webhook Setup</div>
+  <div class="stories-grid">
+
+    <div class="story-card">
+      <div class="story-id">E2-01</div>
+      <div class="story-body">
+        <div class="story-as">As an on-call engineer, I receive alerts from Alertmanager that also trigger the AI triage pipeline so that every firing alert gets analyzed automatically.</div>
+        <div class="story-title">Configure Alertmanager webhook receiver for triage service</div>
+        <div class="story-desc">Add a webhook_configs receiver in Alertmanager config pointing to the triage service at http://&lt;ai-vm&gt;:8090/webhook. Keep existing email receiver as the primary notification channel. The webhook is an additional receiver that feeds the AI pipeline. Alertmanager continues to send emails directly &mdash; the AI triage is supplementary, not a replacement. Test with a manually triggered alert.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Alerting</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">3<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+        <div class="blocker-badge">blocks E2-06</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sub-epic: Context Gathering -->
+  <div class="section-label">Track B2 &mdash; Context Gathering (Prometheus + Loki)</div>
+  <div class="stories-grid">
+
+    <div class="story-card">
+      <div class="story-id">E2-02</div>
+      <div class="story-body">
+        <div class="story-as">As the triage service, I can query Prometheus for the last 15 minutes of a firing metric so that the LLM has quantitative context for its analysis.</div>
+        <div class="story-title">Prometheus context module: query_range, instant_query, get_alerts</div>
+        <div class="story-desc">Python module with functions: <code>query_range</code> (PromQL + time window, returns time series), <code>instant_query</code> (single instant vector), <code>get_alerts</code> (currently firing alerts from /api/v1/alerts). Queries Prometheus HTTP API directly. Read-only. Log every query with timestamp. Return structured data for the LLM prompt builder. Configurable Prometheus URL via environment variable.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Context</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-03</div>
+      <div class="story-body">
+        <div class="story-as">As the triage service, I can query Loki for the last 50 log lines of an affected service so that the LLM sees concrete error messages and stack traces.</div>
+        <div class="story-title">Loki context module: search_logs, get_labels, log_volume</div>
+        <div class="story-desc"><code>search_logs</code>: LogQL query + limit, returns log lines with timestamps. <code>get_labels</code>: available label names/values for building queries. <code>log_volume</code>: log line count over time range (detects log storms). Queries Loki HTTP API. Read-only. Cap result size to 50 lines to prevent context overflow. Configurable Loki URL.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Context</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sub-epic: FastAPI Triage Service -->
+  <div class="section-label">Track B3 &mdash; FastAPI LLM Triage Service</div>
+  <div class="stories-grid">
+
+    <div class="story-card">
+      <div class="story-id">E2-04</div>
+      <div class="story-body">
+        <div class="story-as">As a developer, I can POST an alert webhook to <code>/webhook</code> and receive a 202 Accepted immediately so that Alertmanager never times out waiting.</div>
+        <div class="story-title">FastAPI scaffold: webhook receiver, async processing, health endpoint</div>
+        <div class="story-desc">FastAPI app with <code>POST /webhook</code> (accepts Alertmanager webhook payload), <code>GET /health</code>, <code>GET /decisions</code> (last N decisions). Webhook returns 202 immediately, processes async via BackgroundTasks. Pydantic models for incoming alert payload. Structured JSON logging. Dockerfile for containerized deployment on the AI/LLM VM. Environment-based config for Prometheus/Loki/Ollama URLs.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">FastAPI</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">3<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+        <div class="blocker-badge">blocks B3</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-05</div>
+      <div class="story-body">
+        <div class="story-as">As an operator, repeated firings of the same alert within 5 minutes are deduplicated so that Ollama isn't called 20 times for one flapping alert.</div>
+        <div class="story-title">Alert deduplication + 5-minute grouping window</div>
+        <div class="story-desc">In-memory dict keyed by (alertname, instance label). TTL = 5 minutes. On duplicate within window: skip LLM call, log "deduplicated". On new or expired key: proceed to analysis. Thread-safe with asyncio.Lock. Edge case: if alert resolves and re-fires within window, reset TTL and re-process. Log dedup events for audit.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">FastAPI</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-06</div>
+      <div class="story-body">
+        <div class="story-as">As the triage service, I can concurrently query Prometheus and Loki so that context is gathered in parallel and total latency stays under 10 seconds.</div>
+        <div class="story-title">Parallel context fan-out: gather Prometheus + Loki data concurrently</div>
+        <div class="story-desc">Use asyncio.gather to call Prometheus (query_range for the firing metric, 15-min window) and Loki (search_logs for the affected service, last 50 lines) concurrently. Timeout per query: 8 seconds. On timeout: include partial context with a note ("Loki unavailable"). Assemble context dict: {metric_series, log_lines, alert_metadata}. Pass to LLM prompt builder.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">FastAPI</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-07</div>
+      <div class="story-body">
+        <div class="story-as">As an on-call engineer, I receive one of two decisions (ESCALATE / DISMISS) from the LLM with a written RCA so that I know exactly what action to take.</div>
+        <div class="story-title">LLM prompt + structured ESCALATE/DISMISS decision parser</div>
+        <div class="story-desc">Prompt template: system role (SRE assistant), alert metadata, metric series (summarized), log excerpt. Instruct to respond ONLY with JSON: {"decision": "ESCALATE|DISMISS", "severity": "critical|warning|info", "reason": "...", "rca": "...", "suggested_actions": [...]}. Parse with Pydantic. On parse failure: retry once with stricter instruction, then default to ESCALATE (safe fallback). Log raw LLM response always. Queries Ollama at http://&lt;ai-vm&gt;:11434/api/generate.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">LLM</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">8<small>pts</small></div>
+        <div class="time-badge">1.5 days</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-08</div>
+      <div class="story-body">
+        <div class="story-as">As an on-call engineer, when the LLM decides ESCALATE I receive an email with the full RCA so that I have actionable context without opening any dashboard.</div>
+        <div class="story-title">ESCALATE action: send RCA email via SMTP</div>
+        <div class="story-desc">On ESCALATE: compose email with alert name, firing time, LLM RCA text, severity, suggested actions, Grafana dashboard link, direct Prometheus query link. Send via SMTP (reuse existing Gmail SMTP credentials). Use Python smtplib or FastAPI-Mail. On DISMISS: log to structured log only. Always log every decision regardless of action taken.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">FastAPI</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-09</div>
+      <div class="story-body">
+        <div class="story-as">As an on-call engineer, if the LLM takes longer than 5 minutes I still receive the raw alert via email so that the AI layer never silently swallows an alert.</div>
+        <div class="story-title">5-minute timeout fallback: raw alert passthrough to email</div>
+        <div class="story-desc">Wrap the entire triage pipeline (context gathering + LLM call + decision) in asyncio.wait_for with timeout=300s. On TimeoutError: immediately send raw alert email with "AI triage timed out" note. Log timeout event. This is the hard safety guarantee &mdash; implement and test this before the LLM integration. Test by mocking Ollama with a long sleep.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">FastAPI</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">3<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+        <div class="blocker-badge">safety gate</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-10</div>
+      <div class="story-body">
+        <div class="story-as">As a developer, I can view all past RCA decisions in a simple web UI so that the demo shows the decision history and audit trail.</div>
+        <div class="story-title">Decision history: /decisions endpoint + simple HTML dashboard</div>
+        <div class="story-desc">Store all decisions in an in-memory list (or SQLite for persistence). GET /decisions returns JSON list of {timestamp, alertname, decision, rca, severity, latency_ms}. Optional: simple HTML page at /dashboard that renders the decision log in a table. Useful for demo &mdash; show the audience the AI's reasoning in real time.</div>
+        <div class="story-tags">
+          <span class="tag tag-should">Should</span>
+          <span class="tag tag-ai">FastAPI</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">3<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-11</div>
+      <div class="story-body">
+        <div class="story-as">As a developer, I can containerize the full AI triage stack with docker-compose so that it deploys reproducibly on the AI VM.</div>
+        <div class="story-title">Docker-compose for AI stack: triage service + Ollama</div>
+        <div class="story-desc">Create ai-compose.yml.j2 template for the AI/LLM VM. Services: triage-service (FastAPI, port 8090), Ollama (port 11434, GPU passthrough via NVIDIA runtime). Shared Docker network. Environment variables for Prometheus/Loki/SMTP endpoints. Health checks. Add to Ansible playbooks as a new "ai" host group. GPU passthrough: deploy with nvidia-container-toolkit.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-docker">Docker</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-12</div>
+      <div class="story-body">
+        <div class="story-as">As a developer, I can trigger a real alert with load-test.sh and see the full pipeline execute end-to-end so that the MVP is proven to work.</div>
+        <div class="story-title">End-to-end integration: alert &rarr; triage &rarr; LLM &rarr; RCA email</div>
+        <div class="story-desc">Run load-test.sh to trigger latency alert. Verify: Alertmanager fires &rarr; webhook received by triage service (check /decisions) &rarr; Prometheus + Loki context gathered &rarr; Ollama called &rarr; ESCALATE/DISMISS decision &rarr; email received with RCA. Check total pipeline latency under 60 seconds (excluding Alertmanager's own group_wait). This is the Sprint 2 demo.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Validation</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">3<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+        <div class="blocker-badge">milestone</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+<!-- =========================================================== TIMELINE -->
+<div id="tab-timeline" class="tab-content">
+<div class="content" style="max-width:1000px;">
+
+  <div class="mvp-box" style="margin-bottom:28px;">
+    <h3>One primary track, one supporting track</h3>
+    <p>AI RCA (Epic 2) is the main deliverable. AWS setup (Epic 1) is a prerequisite that should be completed in the first 2&ndash;3 days. Development of the triage service can begin locally/in parallel before AWS is ready.</p>
+    <ul>
+      <li><strong>Milestone 1 (Day 3):</strong> AWS environment live &mdash; all services running, Ollama responding, dashboards green.</li>
+      <li><strong>Milestone 2 (Day 14):</strong> Alert fires &rarr; AI triage &rarr; RCA email received. Full pipeline working end-to-end.</li>
+    </ul>
+  </div>
+
+  <div class="week-block">
+    <div class="week-title">Week 1 &mdash; March 27 &rarr; April 2</div>
+    <div class="week-subtitle">Days 1&ndash;3: AWS setup. Days 3&ndash;7: triage service scaffold, context modules, Ollama integration</div>
+
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="background:rgba(78,168,222,.06);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:16px;font-size:12px;font-weight:700;color:var(--accent-blue);text-transform:uppercase;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg);">AWS Setup</div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div class="day-item infra"><span class="item-name">E1-01 AWS account, IAM, billing alerts, SSH keys</span><span class="item-time">Day 1 &middot; 0.5d</span></div>
+        <div class="day-item infra"><span class="item-name">E1-02 Provision 4 EC2 instances, security groups, EBS</span><span class="item-time">Day 1&ndash;2 &middot; 1d</span></div>
+        <div class="day-item infra"><span class="item-name">E1-03 Update Ansible inventory, run playbooks, deploy stack</span><span class="item-time">Day 2 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E1-04 Install NVIDIA drivers + Ollama + pull model on GPU VM</span><span class="item-time">Day 2&ndash;3 &middot; 1d</span></div>
+        <div class="day-item milestone"><span class="item-name">&#9873; E1-05 Validation: all targets UP, dashboards live, Ollama responding</span><span class="item-time">Day 3 &middot; 0.5d</span></div>
+      </div>
+    </div>
+
+    <div style="height:16px;"></div>
+
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="background:rgba(176,126,232,.06);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:16px;font-size:12px;font-weight:700;color:var(--accent-purple);text-transform:uppercase;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg);">AI RCA</div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div class="day-item ai"><span class="item-name">E2-01 Configure Alertmanager webhook to triage service</span><span class="item-time">Day 3 &middot; 0.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-04 FastAPI scaffold + webhook receiver + /health + /decisions</span><span class="item-time">Day 3 &middot; 0.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-09 Timeout fallback (5-min passthrough) &mdash; implement and test first</span><span class="item-time">Day 4 &middot; 0.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-02 Prometheus context module (query_range, instant_query, get_alerts)</span><span class="item-time">Day 4 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-03 Loki context module (search_logs, get_labels, log_volume)</span><span class="item-time">Day 5 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-05 Alert deduplication + 5-min grouping window</span><span class="item-time">Day 6 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-06 Parallel context fan-out (asyncio.gather, 8s timeout per query)</span><span class="item-time">Day 7 &middot; 1d</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="week-block">
+    <div class="week-title">Week 2 &mdash; April 3 &rarr; April 9</div>
+    <div class="week-subtitle">LLM prompt engineering, ESCALATE email, docker-compose packaging, end-to-end demo</div>
+
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="background:rgba(176,126,232,.06);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:16px;font-size:12px;font-weight:700;color:var(--accent-purple);text-transform:uppercase;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg);">AI RCA</div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div class="day-item ai"><span class="item-name">E2-07 LLM prompt template + JSON parser + ESCALATE/DISMISS logic</span><span class="item-time">Day 8&ndash;9 &middot; 1.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-08 ESCALATE email: compose + send RCA via SMTP</span><span class="item-time">Day 9&ndash;10 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-11 Docker-compose for AI stack (triage service + Ollama + GPU)</span><span class="item-time">Day 10 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-10 Decision history dashboard (/decisions UI)</span><span class="item-time">Day 11 &middot; 0.5d</span></div>
+        <div class="day-item ai"><span class="item-name">Buffer: prompt tuning, edge cases (parse failures, Ollama cold start)</span><span class="item-time">Day 11&ndash;12 &middot; 1d</span></div>
+        <div class="day-item milestone"><span class="item-name">&#9873; E2-12 End-to-end demo: load-test.sh &rarr; alert &rarr; AI triage &rarr; RCA email</span><span class="item-time">Day 13&ndash;14 &middot; 0.5d</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">Risk Register</div>
+  <div class="risk-grid">
+    <div class="risk-card">
+      <h4 style="color:var(--accent-red)">High Risks</h4>
+      <ul>
+        <li><strong>AWS account provisioning delayed by supervisor/admin.</strong> Mitigation: submit cost justification doc immediately. Start triage service development locally while waiting.</li>
+        <li><strong>Ollama cold-start or OOM on g4dn.xlarge.</strong> Mitigation: pre-pull model during setup. Use quantized (Q4) variant of llama3.1:8b. Test memory footprint before integrating. T4 GPU has 16 GB VRAM &mdash; 8B model (Q4) fits in ~5 GB.</li>
+        <li><strong>LLM produces inconsistent JSON output.</strong> Mitigation: strict output format instruction + Pydantic validator + one retry + ESCALATE default. Build and test the parser before integrating Ollama.</li>
+      </ul>
+    </div>
+    <div class="risk-card">
+      <h4 style="color:var(--accent-orange)">Medium Risks</h4>
+      <ul>
+        <li><strong>AWS costs exceed expectations.</strong> Billing alerts at $100/$200/$300. Stop GPU instance outside work hours. Use spot instances for development (not demo).</li>
+        <li><strong>LLM RCA quality is poor with 8B model.</strong> Try Mistral 7B as alternative. Iterate on prompts. For demo, pre-select alert scenarios that produce good results.</li>
+        <li><strong>Network latency between VMs affects triage pipeline.</strong> All VMs in same VPC/AZ. Context gathering timeout (8s per source) handles this.</li>
+        <li><strong>NVIDIA driver installation on g4dn.xlarge.</strong> Use Amazon Deep Learning AMI which has drivers pre-installed. Fallback: manual CUDA toolkit install.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top:28px;" class="note-box">
+    <strong>Future sprints:</strong> Kubernetes migration (medium priority), Terraform IaC, Drain3 anomaly detector, Jaeger MCP, WATCH state re-checker, private cloud migration, deep prompt engineering, and full AI pipeline test suite.
+  </div>
+
+</div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['overview','epic1','epic2','timeline'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
+</body>
+</html>

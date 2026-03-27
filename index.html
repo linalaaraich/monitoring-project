@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Observability Platform — CIRES Technologies</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e0e0e0;
+    --muted: #8890a0;
+    --accent-blue: #4ea8de;
+    --accent-green: #6bcf7f;
+    --accent-orange: #f0a050;
+    --accent-purple: #b07ee8;
+    --accent-red: #e06070;
+    --accent-cyan: #40d0d0;
+    --accent-yellow: #e0d060;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter','Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  .hero { padding:64px 40px 40px; text-align:center; border-bottom:1px solid var(--border); background: linear-gradient(180deg, #13151e 0%, var(--bg) 100%); }
+  .hero .eyebrow { font-size:12px; font-weight:600; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); margin-bottom:16px; }
+  .hero h1 { font-size:32px; font-weight:800; margin-bottom:10px; letter-spacing:-.5px; }
+  .hero h1 span { color:var(--accent-blue); }
+  .hero p { font-size:15px; color:var(--muted); max-width:560px; margin:0 auto 28px; line-height:1.7; }
+  .hero-meta { display:flex; align-items:center; justify-content:center; gap:24px; flex-wrap:wrap; }
+  .meta-item { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .meta-dot { width:8px; height:8px; border-radius:50%; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:20px; padding:48px 40px; max-width:1200px; margin:0 auto; }
+
+  .card {
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:28px; text-decoration:none; color:var(--text);
+    transition:transform .2s, box-shadow .2s, border-color .2s;
+    display:flex; flex-direction:column; gap:16px;
+  }
+  .card:hover { transform:translateY(-4px); box-shadow:0 12px 32px rgba(0,0,0,.4); }
+
+  .card-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; }
+  .card-header { display:flex; align-items:flex-start; gap:16px; }
+  .card-header-text {}
+  .card h2 { font-size:16px; font-weight:700; margin-bottom:5px; line-height:1.3; }
+  .card p { font-size:13px; color:var(--muted); line-height:1.6; }
+  .card-footer { display:flex; align-items:center; justify-content:space-between; margin-top:auto; padding-top:16px; border-top:1px solid var(--border); }
+  .card-tags { display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { font-size:11px; padding:2px 8px; border-radius:4px; font-weight:600; }
+  .card-arrow { color:var(--muted); font-size:16px; transition:transform .2s, color .2s; }
+  .card:hover .card-arrow { transform:translateX(4px); color:var(--text); }
+
+  .card-arch { border-color:rgba(78,168,222,.25); }
+  .card-arch:hover { border-color:rgba(78,168,222,.5); }
+  .card-arch .card-icon { background:rgba(78,168,222,.1); }
+
+  .card-sprint { border-color:rgba(176,126,232,.25); }
+  .card-sprint:hover { border-color:rgba(176,126,232,.5); }
+  .card-sprint .card-icon { background:rgba(176,126,232,.1); }
+
+  .tag-blue { background:rgba(78,168,222,.1); color:var(--accent-blue); }
+  .tag-purple { background:rgba(176,126,232,.1); color:var(--accent-purple); }
+  .tag-green { background:rgba(107,207,127,.1); color:var(--accent-green); }
+  .tag-orange { background:rgba(240,160,80,.1); color:var(--accent-orange); }
+  .tag-cyan { background:rgba(64,208,208,.1); color:var(--accent-cyan); }
+
+  .status-row { display:flex; align-items:center; justify-content:center; gap:32px; padding:24px 40px; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .status-item { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  .status-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .dot-done { background:var(--accent-green); box-shadow:0 0 6px rgba(107,207,127,.5); }
+  .dot-active { background:var(--accent-orange); box-shadow:0 0 6px rgba(240,160,80,.5); animation:pulse 2s infinite; }
+  .dot-pending { background:var(--border); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+  /* Top nav */
+  .topnav { display:flex; align-items:center; gap:12px; padding:14px 40px; background:#13151e; border-bottom:1px solid var(--border); }
+  .topnav span { color:var(--muted); font-size:13px; font-weight:600; margin-right:4px; }
+  .navlink { display:inline-flex; align-items:center; gap:8px; padding:8px 18px; border-radius:8px; font-size:13px; font-weight:600; text-decoration:none; border:1px solid; transition:background .2s, transform .15s; }
+  .navlink:hover { transform:translateY(-1px); }
+  .navlink-arch { color:var(--accent-blue); border-color:rgba(78,168,222,.4); background:rgba(78,168,222,.08); }
+  .navlink-arch:hover { background:rgba(78,168,222,.18); }
+  .navlink-sprint { color:var(--accent-purple); border-color:rgba(176,126,232,.4); background:rgba(176,126,232,.08); }
+  .navlink-sprint:hover { background:rgba(176,126,232,.18); }
+
+  @media(max-width:600px) {
+    .hero { padding:40px 24px 32px; }
+    .hero h1 { font-size:24px; }
+    .grid { padding:32px 20px; }
+    .status-row { gap:20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <span>Pages:</span>
+  <a href="architecture.html" class="navlink navlink-arch">🏗️ Architecture</a>
+  <a href="sprint2-backlog.html" class="navlink navlink-sprint">🚀 Sprint 2 Backlog</a>
+</div>
+
+<div class="hero">
+  <div class="eyebrow">CIRES Technologies · Tanger Med</div>
+  <h1>Observability <span>Platform</span></h1>
+  <p>Full-stack observability for <code>react-springboot-mysql</code>. Metrics, logs, distributed traces, and AI-assisted root cause analysis — deployed on AWS EKS via Terraform and Ansible.</p>
+  <div class="hero-meta">
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-blue)"></div>Prometheus · Loki · Jaeger</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-green)"></div>OTel Collector · Kong KIC</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-purple)"></div>Ollama · FastAPI · MCP</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-cyan)"></div>AWS EKS · Terraform · Ansible</div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <a href="architecture.html" class="card card-arch">
+    <div class="card-header">
+      <div class="card-icon">🏗️</div>
+      <div class="card-header-text">
+        <h2>Architecture Diagram</h2>
+        <p>Interactive diagram of all VMs, containers, ports, and data flows across metrics, logs, and traces pipelines.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-blue">Infrastructure</span>
+        <span class="tag tag-green">Data Flows</span>
+        <span class="tag tag-orange">Services</span>
+      </div>
+      <div class="card-arrow">→</div>
+    </div>
+  </a>
+
+  <a href="sprint2-backlog.html" class="card card-sprint">
+    <div class="card-header">
+      <div class="card-icon">🚀</div>
+      <div class="card-header-text">
+        <h2>Sprint 2 Backlog</h2>
+        <p>27 user stories across 2 epics: AWS + Kubernetes migration and AI RCA system. 121 story points, 2 parallel tracks, due April 9th.</p>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="card-tags">
+        <span class="tag tag-cyan">Cloud / K8s</span>
+        <span class="tag tag-purple">AI RCA</span>
+        <span class="tag tag-orange">Due Apr 9</span>
+      </div>
+      <div class="card-arrow">→</div>
+    </div>
+  </a>
+
+</div>
+
+<div class="status-row">
+  <div class="status-item"><div class="status-dot dot-done"></div>Sprint 1 complete — local observability stack</div>
+  <div class="status-item"><div class="status-dot dot-active"></div>Sprint 2 in progress — cloud migration + AI RCA</div>
+  <div class="status-item"><div class="status-dot dot-pending"></div>Sprint 3 planned — Drain3, Jaeger MCP, prompt tuning</div>
+</div>
+
+</body>
+</html>
