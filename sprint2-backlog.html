@@ -175,15 +175,16 @@
 
   <div class="mvp-box">
     <h3>MVP Definition &mdash; what "done" looks like on April 9th</h3>
-    <p>The AI RCA pipeline is the primary deliverable. The AWS demo environment supports it.</p>
+    <p>The AI RCA pipeline is the primary deliverable. The AWS demo environment is a temporary hosting vehicle for the April 9 demo only &mdash; all further development and production will be on CIRES private cloud.</p>
     <ul>
       <li><strong>Primary (Must):</strong> Alert fires &rarr; LLM Triage Service receives webhook &rarr; gathers context from Prometheus + Loki &rarr; self-hosted Ollama produces RCA &rarr; ESCALATE sends email with root cause analysis. 5-min timeout fallback never drops an alert.</li>
-      <li><strong>Supporting (Must):</strong> Full observability stack running on AWS EC2 (reusing existing docker-compose &amp; Ansible). Reachable, scraping, dashboards green.</li>
+      <li><strong>Supporting (Must):</strong> Full observability stack running on AWS EC2 for the demo (reusing existing docker-compose &amp; Ansible). Small-scale sample app monitored. Reachable, scraping, dashboards green.</li>
+      <li><strong>Post-demo:</strong> AWS resources terminated. Same Ansible playbooks reused on CIRES private cloud &mdash; only inventory IPs change.</li>
     </ul>
   </div>
 
   <div class="note-box warn">
-    <strong>Infrastructure note:</strong> AWS is for demo/development only. Production deployment will be on CIRES private cloud infrastructure. No Kubernetes or Terraform in this sprint &mdash; we reuse the existing Ansible + docker-compose setup on EC2 instances. K8s migration is deferred to a future sprint.
+    <strong>Infrastructure note:</strong> AWS is for the April 9 demo only &mdash; resources will be terminated immediately after. The monitored system is a small-scale sample app, not production workloads. Production deployment and all further development will be on CIRES private cloud infrastructure. No Kubernetes or Terraform in this sprint &mdash; we reuse the existing Ansible + docker-compose setup on EC2 instances.
   </div>
 
   <div class="stats-row">
@@ -224,7 +225,7 @@
       <div class="epic-icon" style="background:rgba(78,168,222,.1);">&#9729;</div>
       <div>
         <h2 style="color:var(--accent-blue)">Epic 1 &mdash; AWS Demo Environment</h2>
-        <p>Provision EC2 instances, deploy existing observability stack via Ansible + docker-compose. Add GPU instance for Ollama. No K8s, no Terraform &mdash; just cloud VMs.</p>
+        <p>Provision EC2 instances for the demo, deploy existing observability stack via Ansible + docker-compose. Add GPU instance for Ollama. Demo-only &mdash; teardown after April 9.</p>
       </div>
       <div class="epic-meta">
         <div class="pts" style="color:var(--accent-blue)">20</div>
@@ -249,12 +250,12 @@
   <div class="section-label">Out of Scope &mdash; Future Sprints</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Kubernetes Migration</div>
-      <div style="font-size:11px;color:var(--muted);">EKS, K8s manifests, Helm charts. Medium priority &mdash; deferred until AI RCA is proven.</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Container Orchestration</div>
+      <div style="font-size:11px;color:var(--muted);">K8s manifests, Helm charts for private cloud. Deferred until AI RCA is proven and private cloud is available.</div>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Terraform IaC</div>
-      <div style="font-size:11px;color:var(--muted);">Infrastructure as Code for AWS/private cloud. Will be needed for production but not for demo.</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Infrastructure as Code</div>
+      <div style="font-size:11px;color:var(--muted);">IaC tooling for private cloud provisioning. Will be evaluated when private cloud deployment begins.</div>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
       <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Drain3 Anomaly Detector</div>
@@ -269,8 +270,8 @@
       <div style="font-size:11px;color:var(--muted);">Persistent WATCH queue with APScheduler. Needs stable triage service first.</div>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Private Cloud Migration</div>
-      <div style="font-size:11px;color:var(--muted);">Move from AWS demo to CIRES private cloud. Same Ansible playbooks, new inventory.</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Private Cloud Deployment</div>
+      <div style="font-size:11px;color:var(--muted);">Deploy to CIRES private cloud after demo. Same Ansible playbooks, new inventory IPs.</div>
     </div>
   </div>
 
@@ -285,7 +286,7 @@
     <div class="epic-icon" style="background:rgba(78,168,222,.1);font-size:22px;">&#9729;</div>
     <div>
       <h2 style="color:var(--accent-blue)">Epic 1 &mdash; AWS Demo Environment</h2>
-      <p>Provision EC2 instances matching the local 3-VM layout, plus a GPU instance for Ollama. Deploy using existing Ansible playbooks and docker-compose templates. No new tooling &mdash; just cloud VMs.</p>
+      <p>Provision EC2 instances matching the local 3-VM layout, plus a GPU instance for Ollama. Deploy using existing Ansible playbooks and docker-compose templates. Demo-only &mdash; all AWS resources terminated after April 9. No new tooling, just cloud VMs.</p>
     </div>
     <div class="epic-meta">
       <div class="pts" style="color:var(--accent-blue)">20 pts</div>
@@ -294,7 +295,7 @@
   </div>
 
   <div class="note-box">
-    <strong>Approach:</strong> We already have working Ansible playbooks and docker-compose templates for 3 VMs. The cloud migration is just: provision EC2 instances, update the Ansible inventory with new IPs, run the playbooks. The only new work is adding a 4th VM (GPU) for Ollama and the AI triage service.
+    <strong>Approach:</strong> We already have working Ansible playbooks and docker-compose templates for 3 VMs. The AWS setup is just: provision EC2 instances for the demo, update the Ansible inventory with new IPs, run the playbooks. The only new work is adding a 4th VM (GPU) for Ollama and the AI triage service. AWS is a temporary hosting vehicle &mdash; the same playbooks will be reused on CIRES private cloud after the demo.
   </div>
 
   <div class="section-label">AWS Account &amp; Security</div>
@@ -329,7 +330,7 @@
       <div class="story-body">
         <div class="story-as">As an operator, I can SSH into 4 EC2 instances that mirror our local VM layout so that the existing Ansible playbooks work with minimal changes.</div>
         <div class="story-title">Provision 4 EC2 instances: monitoring, application, network, AI/LLM</div>
-        <div class="story-desc">Launch in eu-west-3 (Paris). Monitoring: t3.large (8 GB). Application: t3.medium (4 GB). Network: t3.small (2 GB). AI/LLM: g4dn.xlarge (16 GB + T4 GPU). All in same VPC/subnet. Security groups: allow SSH from team IPs, inter-VM traffic, Grafana (3000) and Kong (8000) from team IPs. EBS: gp3 volumes (50/30/20/50 GB). Create start/stop scripts or Lambda for GPU instance scheduling (work hours only).</div>
+        <div class="story-desc">Launch in eu-west-3 (Paris). Monitoring: t3.large (8 GB). Application: t3.medium (4 GB). Network: t3.small (2 GB). AI/LLM: g4dn.xlarge (16 GB + T4 GPU). All in same VPC/subnet. Security groups: allow SSH from team IPs, inter-VM traffic, Grafana (3000) and Kong (8000) from team IPs. EBS: gp3 volumes (50/30/20/50 GB). Create start/stop scripts for all instances (work hours only &mdash; demo env, no 24/7 needed). All resources tagged for easy teardown after demo.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-infra">AWS</span>
@@ -388,7 +389,7 @@
       <div class="story-body">
         <div class="story-as">As a developer, I can open Grafana on the AWS monitoring VM and see all dashboards with live data so that the demo environment is validated.</div>
         <div class="story-title">End-to-end cloud validation: all services healthy, dashboards live</div>
-        <div class="story-desc">Prometheus targets page: all UP. Grafana unified-overview dashboard: metrics flowing. Loki: logs from Spring Boot and Kong. Jaeger: traces via OTel Collector. Ollama: responds to queries. Run load-test.sh against Kong on network VM. Verify all three pillars populate. This is the Epic 1 completion gate.</div>
+        <div class="story-desc">Prometheus targets page: all UP. Grafana unified-overview dashboard: metrics flowing. Loki: logs from Spring Boot and Kong. Jaeger: traces via OTel Collector. Ollama: responds to queries. Run load-test.sh against Kong on network VM (small-scale load). Verify all three pillars populate. This is the Epic 1 completion gate &mdash; confirms demo environment is ready for AI RCA integration.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-infra">Validation</span>
@@ -637,7 +638,7 @@
       <div class="story-body">
         <div class="story-as">As a developer, I can trigger a real alert with load-test.sh and see the full pipeline execute end-to-end so that the MVP is proven to work.</div>
         <div class="story-title">End-to-end integration: alert &rarr; triage &rarr; LLM &rarr; RCA email</div>
-        <div class="story-desc">Run load-test.sh to trigger latency alert. Verify: Alertmanager fires &rarr; webhook received by triage service (check /decisions) &rarr; Prometheus + Loki context gathered &rarr; Ollama called &rarr; ESCALATE/DISMISS decision &rarr; email received with RCA. Check total pipeline latency under 60 seconds (excluding Alertmanager's own group_wait). This is the Sprint 2 demo.</div>
+        <div class="story-desc">Run load-test.sh (small-scale) to trigger latency alert. Verify: Alertmanager fires &rarr; webhook received by triage service (check /decisions) &rarr; Prometheus + Loki context gathered &rarr; Ollama called &rarr; ESCALATE/DISMISS decision &rarr; email received with RCA. Check total pipeline latency under 60 seconds (excluding Alertmanager's own group_wait). This is the Sprint 2 demo &mdash; validates the architecture on a sample app before private cloud production deployment.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-ai">Validation</span>
@@ -661,7 +662,7 @@
 
   <div class="mvp-box" style="margin-bottom:28px;">
     <h3>One primary track, one supporting track</h3>
-    <p>AI RCA (Epic 2) is the main deliverable. AWS setup (Epic 1) is a prerequisite that should be completed in the first 2&ndash;3 days. Development of the triage service can begin locally/in parallel before AWS is ready.</p>
+    <p>AI RCA (Epic 2) is the main deliverable. AWS setup (Epic 1) is a lightweight prerequisite &mdash; demo-only, small-scale, completed in 2&ndash;3 days. Development of the triage service can begin locally/in parallel before AWS is ready. After the demo, AWS is terminated and all further work moves to CIRES private cloud.</p>
     <ul>
       <li><strong>Milestone 1 (Day 3):</strong> AWS environment live &mdash; all services running, Ollama responding, dashboards green.</li>
       <li><strong>Milestone 2 (Day 14):</strong> Alert fires &rarr; AI triage &rarr; RCA email received. Full pipeline working end-to-end.</li>
@@ -729,7 +730,7 @@
     <div class="risk-card">
       <h4 style="color:var(--accent-orange)">Medium Risks</h4>
       <ul>
-        <li><strong>AWS costs exceed expectations.</strong> Billing alerts at $100/$200/$300. Stop GPU instance outside work hours. Use spot instances for development (not demo).</li>
+        <li><strong>AWS costs exceed expectations.</strong> Billing alerts at $100/$200/$300. Stop all instances outside work hours. Small-scale demo keeps costs low (~$88&ndash;$250 total). Terminate all resources immediately after demo.</li>
         <li><strong>LLM RCA quality is poor with 8B model.</strong> Try Mistral 7B as alternative. Iterate on prompts. For demo, pre-select alert scenarios that produce good results.</li>
         <li><strong>Network latency between VMs affects triage pipeline.</strong> All VMs in same VPC/AZ. Context gathering timeout (8s per source) handles this.</li>
         <li><strong>NVIDIA driver installation on g4dn.xlarge.</strong> Use Amazon Deep Learning AMI which has drivers pre-installed. Fallback: manual CUDA toolkit install.</li>
@@ -738,7 +739,7 @@
   </div>
 
   <div style="margin-top:28px;" class="note-box">
-    <strong>Future sprints:</strong> Kubernetes migration (medium priority), Terraform IaC, Drain3 anomaly detector, Jaeger MCP, WATCH state re-checker, private cloud migration, deep prompt engineering, and full AI pipeline test suite.
+    <strong>Future sprints (on CIRES private cloud):</strong> Private cloud deployment, container orchestration, IaC tooling, Drain3 anomaly detector, Jaeger MCP, WATCH state re-checker, deep prompt engineering, and full AI pipeline test suite. AWS is not part of any future sprint &mdash; all further work is on private cloud.
   </div>
 
 </div>

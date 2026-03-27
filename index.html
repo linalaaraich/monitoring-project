@@ -103,12 +103,12 @@
 <div class="hero">
   <div class="eyebrow">CIRES Technologies · Tanger Med</div>
   <h1>Observability <span>Platform</span></h1>
-  <p>Full-stack observability for <code>react-springboot-mysql</code>. Metrics, logs, distributed traces, and AI-assisted root cause analysis — deployed on AWS EKS via Terraform and Ansible.</p>
+  <p>Full-stack observability for <code>react-springboot-mysql</code>. Metrics, logs, distributed traces, and AI-assisted root cause analysis — deployed via Ansible + docker-compose (AWS EC2 for demo, CIRES private cloud for production).</p>
   <div class="hero-meta">
     <div class="meta-item"><div class="meta-dot" style="background:var(--accent-blue)"></div>Prometheus · Loki · Jaeger</div>
-    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-green)"></div>OTel Collector · Kong KIC</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-green)"></div>OTel Collector · Kong Gateway</div>
     <div class="meta-item"><div class="meta-dot" style="background:var(--accent-purple)"></div>Ollama · FastAPI · MCP</div>
-    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-cyan)"></div>AWS EKS · Terraform · Ansible</div>
+    <div class="meta-item"><div class="meta-dot" style="background:var(--accent-cyan)"></div>AWS EC2 (demo) · Ansible · Docker</div>
   </div>
 </div>
 
@@ -137,12 +137,12 @@
       <div class="card-icon">🚀</div>
       <div class="card-header-text">
         <h2>Sprint 2 Backlog</h2>
-        <p>27 user stories across 2 epics: AWS + Kubernetes migration and AI RCA system. 121 story points, 2 parallel tracks, due April 9th.</p>
+        <p>17 user stories across 2 epics: AWS demo environment and AI RCA system (MVP). 73 story points, due April 9th.</p>
       </div>
     </div>
     <div class="card-footer">
       <div class="card-tags">
-        <span class="tag tag-cyan">Cloud / K8s</span>
+        <span class="tag tag-cyan">AWS Demo</span>
         <span class="tag tag-purple">AI RCA</span>
         <span class="tag tag-orange">Due Apr 9</span>
       </div>
@@ -154,7 +154,7 @@
 
 <div class="status-row">
   <div class="status-item"><div class="status-dot dot-done"></div>Sprint 1 complete — local observability stack</div>
-  <div class="status-item"><div class="status-dot dot-active"></div>Sprint 2 in progress — cloud migration + AI RCA</div>
+  <div class="status-item"><div class="status-dot dot-active"></div>Sprint 2 in progress — AWS demo env + AI RCA</div>
   <div class="status-item"><div class="status-dot dot-pending"></div>Sprint 3 planned — Drain3, Jaeger MCP, prompt tuning</div>
 </div>
 
