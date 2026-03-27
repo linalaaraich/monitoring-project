@@ -177,14 +177,14 @@
     <h3>MVP Definition &mdash; what "done" looks like on April 9th</h3>
     <p>The AI RCA pipeline is the primary deliverable. The AWS demo environment is a temporary hosting vehicle for the April 9 demo only &mdash; all further development and production will be on CIRES private cloud.</p>
     <ul>
-      <li><strong>Primary (Must):</strong> Alert fires &rarr; LLM Triage Service receives webhook &rarr; gathers context from Prometheus + Loki &rarr; self-hosted Ollama produces RCA &rarr; ESCALATE sends email with root cause analysis. 5-min timeout fallback never drops an alert.</li>
+      <li><strong>Primary (Must):</strong> Alert fires &rarr; LLM Triage Service receives webhook &rarr; gathers context from Prometheus + Loki &rarr; Drain3 annotates log anomalies &rarr; self-hosted Ollama reasons over enriched context &rarr; ESCALATE sends email with root cause analysis. All layers present: metrics, logs, anomaly detection, LLM reasoning, notification. 5-min timeout fallback never drops an alert.</li>
       <li><strong>Supporting (Must):</strong> Full observability stack running on AWS EC2 for the demo (reusing existing docker-compose &amp; Ansible). Small-scale sample app monitored. Reachable, scraping, dashboards green.</li>
       <li><strong>Post-demo:</strong> AWS resources terminated. Same Ansible playbooks reused on CIRES private cloud &mdash; only inventory IPs change.</li>
     </ul>
   </div>
 
   <div class="note-box warn">
-    <strong>Infrastructure note:</strong> AWS is for the April 9 demo only &mdash; resources will be terminated immediately after. The monitored system is a small-scale sample app, not production workloads. Production deployment and all further development will be on CIRES private cloud infrastructure. No Kubernetes or Terraform in this sprint &mdash; we reuse the existing Ansible + docker-compose setup on EC2 instances.
+    <strong>Infrastructure note:</strong> AWS is for the April 9 demo only &mdash; resources will be terminated immediately after. The monitored system is a small-scale sample app, not production workloads. Production deployment and all further development will be on CIRES private cloud infrastructure. We reuse the existing Ansible + docker-compose setup on EC2 instances. Kubernetes is permanently out of scope for this project.
   </div>
 
   <div class="stats-row">
@@ -193,15 +193,15 @@
       <div class="stat-label">Epics</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-purple)">17</div>
+      <div class="stat-val" style="color:var(--accent-purple)">20</div>
       <div class="stat-label">User Stories</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-orange)">73</div>
+      <div class="stat-val" style="color:var(--accent-orange)">86</div>
       <div class="stat-label">Story Points</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-green)">~12</div>
+      <div class="stat-val" style="color:var(--accent-green)">~15</div>
       <div class="stat-label">Person-days</div>
     </div>
     <div class="stat-card">
@@ -215,7 +215,7 @@
   </div>
 
   <div class="note-box">
-    <strong>Strategy:</strong> Epic 1 (AWS setup) is lightweight &mdash; just provision EC2, run existing Ansible playbooks, and add an AI/LLM VM. Should take 2&ndash;3 days. The remaining 11 days are dedicated to Epic 2 (AI RCA), which is the core deliverable. One person can handle both sequentially, or split across team members for faster delivery.
+    <strong>Strategy:</strong> Epic 1 (AWS setup) is lightweight &mdash; just provision EC2, run existing Ansible playbooks, and add an AI/LLM VM. Should take 2&ndash;3 days. The remaining 11 days are dedicated to Epic 2 (AI RCA + Drain3 anomaly detection), which is the core deliverable. The MVP covers all implementation layers: observability (metrics, logs, traces) &rarr; anomaly detection (Drain3) &rarr; LLM reasoning (Ollama) &rarr; notification (email). One person can handle both epics sequentially, or split across team members for faster delivery.
   </div>
 
   <div class="section-label">Epic Summary</div>
@@ -237,12 +237,12 @@
       <div class="epic-icon" style="background:rgba(176,126,232,.1);">&#129302;</div>
       <div>
         <h2 style="color:var(--accent-purple)">Epic 2 &mdash; AI RCA System (MVP)</h2>
-        <p>Alertmanager webhook, FastAPI Triage Service, Ollama, Prometheus + Loki context gathering. ESCALATE/DISMISS pipeline with email notification and timeout fallback.</p>
+        <p>Alertmanager webhook, Drain3 anomaly detection, FastAPI Triage Service, Ollama, Prometheus + Loki context gathering. Full pipeline: metrics + logs + anomaly detection + LLM reasoning + email notification.</p>
       </div>
       <div class="epic-meta">
-        <div class="pts" style="color:var(--accent-purple)">53</div>
+        <div class="pts" style="color:var(--accent-purple)">66</div>
         <div class="pts-label">story points</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">&asymp; 9 person-days</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">&asymp; 12 person-days</div>
       </div>
     </div>
   </div>
@@ -250,16 +250,8 @@
   <div class="section-label">Out of Scope &mdash; Future Sprints</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Container Orchestration</div>
-      <div style="font-size:11px;color:var(--muted);">K8s manifests, Helm charts for private cloud. Deferred until AI RCA is proven and private cloud is available.</div>
-    </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
       <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Infrastructure as Code</div>
       <div style="font-size:11px;color:var(--muted);">IaC tooling for private cloud provisioning. Will be evaluated when private cloud deployment begins.</div>
-    </div>
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Drain3 Anomaly Detector</div>
-      <div style="font-size:11px;color:var(--muted);">Unsupervised log anomaly detection. Requires stable Loki integration first.</div>
     </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
       <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Jaeger MCP + System Metadata MCP</div>
@@ -272,6 +264,14 @@
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
       <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Private Cloud Deployment</div>
       <div style="font-size:11px;color:var(--muted);">Deploy to CIRES private cloud after demo. Same Ansible playbooks, new inventory IPs.</div>
+    </div>
+  </div>
+
+  <div class="section-label">Out of Scope &mdash; Permanently</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">
+    <div style="background:var(--card);border:1px solid rgba(224,96,112,.2);border-radius:8px;padding:14px 16px;opacity:.5;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--accent-red);">Kubernetes / Container Orchestration</div>
+      <div style="font-size:11px;color:var(--muted);">Not applicable. The project uses Ansible + docker-compose deployed to VMs (AWS EC2 for demo, CIRES private cloud for production). No K8s, EKS, Helm, or container orchestration platforms.</div>
     </div>
   </div>
 
@@ -415,11 +415,11 @@
     <div class="epic-icon" style="background:rgba(176,126,232,.1);font-size:22px;">&#129302;</div>
     <div>
       <h2 style="color:var(--accent-purple)">Epic 2 &mdash; AI RCA System (Sprint 2 MVP)</h2>
-      <p>Alert fires &rarr; FastAPI triage service receives webhook &rarr; gathers context from Prometheus + Loki &rarr; Ollama reasons over context &rarr; ESCALATE/DISMISS decision. Email on ESCALATE. 5-min timeout fallback. All self-hosted, no external APIs.</p>
+      <p>Alert fires &rarr; FastAPI triage service receives webhook &rarr; gathers context from Prometheus + Loki &rarr; Drain3 annotates log anomalies &rarr; Ollama reasons over enriched context &rarr; ESCALATE/DISMISS decision. Email on ESCALATE. 5-min timeout fallback. All layers: metrics, logs, anomaly detection, LLM reasoning, notification. All self-hosted, no external APIs.</p>
     </div>
     <div class="epic-meta">
-      <div class="pts" style="color:var(--accent-purple)">53 pts</div>
-      <div class="pts-label">&asymp; 9 person-days</div>
+      <div class="pts" style="color:var(--accent-purple)">66 pts</div>
+      <div class="pts-label">&asymp; 12 person-days</div>
     </div>
   </div>
 
@@ -491,8 +491,65 @@
 
   </div>
 
+  <!-- Sub-epic: Drain3 Anomaly Detection -->
+  <div class="section-label">Track B3 &mdash; Drain3 Log Anomaly Detection</div>
+  <div class="stories-grid">
+
+    <div class="story-card">
+      <div class="story-id">E2-13</div>
+      <div class="story-body">
+        <div class="story-as">As the triage service, I have an unsupervised anomaly detection layer so that novel or rare log patterns are flagged before the LLM sees them, reducing noise and highlighting real issues.</div>
+        <div class="story-title">Drain3 setup: log template mining + persistence</div>
+        <div class="story-desc">Deploy Drain3 as a Python service (or library within the triage service). Configure <code>drain3.ini</code>: similarity threshold (~0.4), max clusters, depth. Use file-based persistence (<code>FileStatePersistence</code>) so learned templates survive restarts. Feed historical logs from Loki on startup to pre-train the model. Expose a REST endpoint or internal function: <code>analyze(log_line) &rarr; {cluster_id, template, is_new_pattern, change_type}</code>. New/changed patterns are anomalies.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Anomaly Detection</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-14</div>
+      <div class="story-body">
+        <div class="story-as">As the triage service, I can stream recent logs through Drain3 and get anomaly scores so that the LLM context includes which log lines are novel vs routine.</div>
+        <div class="story-title">Drain3 + Loki integration: score log lines from context gathering</div>
+        <div class="story-desc">When the triage service gathers Loki logs (E2-03/E2-06), pass each log line through Drain3 before assembling the LLM prompt. Annotate each line with: <code>[ANOMALY]</code> if it matches a new/rare cluster, <code>[KNOWN]</code> if it matches an established template. Include anomaly summary in context: "X of Y log lines are anomalous, N new patterns detected." This gives the LLM a pre-filtered signal &mdash; it can focus on the anomalous lines rather than reading all 50.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Anomaly Detection</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-15</div>
+      <div class="story-body">
+        <div class="story-as">As an operator, I can see Drain3 cluster statistics and anomaly rates so that I can validate the anomaly detection layer is working and tune thresholds.</div>
+        <div class="story-title">Drain3 observability: cluster stats endpoint + Prometheus metrics</div>
+        <div class="story-desc">Expose <code>GET /drain3/stats</code> returning: total clusters, recent anomaly rate, top new patterns. Export Prometheus metrics: <code>drain3_clusters_total</code>, <code>drain3_anomalies_total</code>, <code>drain3_log_lines_processed_total</code>. Add to the triage service's Prometheus scrape target. This completes the observability loop &mdash; the anomaly detector is itself monitored.</div>
+        <div class="story-tags">
+          <span class="tag tag-should">Should</span>
+          <span class="tag tag-ai">Anomaly Detection</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">3<small>pts</small></div>
+        <div class="time-badge">0.5 day</div>
+      </div>
+    </div>
+
+  </div>
+
   <!-- Sub-epic: FastAPI Triage Service -->
-  <div class="section-label">Track B3 &mdash; FastAPI LLM Triage Service</div>
+  <div class="section-label">Track B4 &mdash; FastAPI LLM Triage Service</div>
   <div class="stories-grid">
 
     <div class="story-card">
@@ -535,7 +592,7 @@
       <div class="story-body">
         <div class="story-as">As the triage service, I can concurrently query Prometheus and Loki so that context is gathered in parallel and total latency stays under 10 seconds.</div>
         <div class="story-title">Parallel context fan-out: gather Prometheus + Loki data concurrently</div>
-        <div class="story-desc">Use asyncio.gather to call Prometheus (query_range for the firing metric, 15-min window) and Loki (search_logs for the affected service, last 50 lines) concurrently. Timeout per query: 8 seconds. On timeout: include partial context with a note ("Loki unavailable"). Assemble context dict: {metric_series, log_lines, alert_metadata}. Pass to LLM prompt builder.</div>
+        <div class="story-desc">Use asyncio.gather to call Prometheus (query_range for the firing metric, 15-min window) and Loki (search_logs for the affected service, last 50 lines) concurrently. Timeout per query: 8 seconds. On timeout: include partial context with a note ("Loki unavailable"). Assemble context dict: {metric_series, log_lines, alert_metadata}. Log lines are then passed through Drain3 for anomaly annotation (E2-14) before reaching the LLM prompt builder.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-ai">FastAPI</span>
@@ -552,7 +609,7 @@
       <div class="story-body">
         <div class="story-as">As an on-call engineer, I receive one of two decisions (ESCALATE / DISMISS) from the LLM with a written RCA so that I know exactly what action to take.</div>
         <div class="story-title">LLM prompt + structured ESCALATE/DISMISS decision parser</div>
-        <div class="story-desc">Prompt template: system role (SRE assistant), alert metadata, metric series (summarized), log excerpt. Instruct to respond ONLY with JSON: {"decision": "ESCALATE|DISMISS", "severity": "critical|warning|info", "reason": "...", "rca": "...", "suggested_actions": [...]}. Parse with Pydantic. On parse failure: retry once with stricter instruction, then default to ESCALATE (safe fallback). Log raw LLM response always. Queries Ollama at http://&lt;ai-vm&gt;:11434/api/generate.</div>
+        <div class="story-desc">Prompt template: system role (SRE assistant), alert metadata, metric series (summarized), Drain3-annotated log excerpt (anomalous lines highlighted). Instruct to respond ONLY with JSON: {"decision": "ESCALATE|DISMISS", "severity": "critical|warning|info", "reason": "...", "rca": "...", "anomaly_summary": "...", "suggested_actions": [...]}. Parse with Pydantic. On parse failure: retry once with stricter instruction, then default to ESCALATE (safe fallback). Log raw LLM response always. Queries Ollama at http://&lt;ai-vm&gt;:11434/api/generate.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-ai">LLM</span>
@@ -621,7 +678,7 @@
       <div class="story-body">
         <div class="story-as">As a developer, I can containerize the full AI triage stack with docker-compose so that it deploys reproducibly on the AI VM.</div>
         <div class="story-title">Docker-compose for AI stack: triage service + Ollama</div>
-        <div class="story-desc">Create ai-compose.yml.j2 template for the AI/LLM VM. Services: triage-service (FastAPI, port 8090), Ollama (port 11434, GPU passthrough via NVIDIA runtime). Shared Docker network. Environment variables for Prometheus/Loki/SMTP endpoints. Health checks. Add to Ansible playbooks as a new "ai" host group. GPU passthrough: deploy with nvidia-container-toolkit.</div>
+        <div class="story-desc">Create ai-compose.yml.j2 template for the AI/LLM VM. Services: triage-service (FastAPI + Drain3, port 8090), Ollama (port 11434, GPU passthrough via NVIDIA runtime). Drain3 runs within the triage service container (Python library). Shared Docker network. Environment variables for Prometheus/Loki/SMTP endpoints. Health checks. Volume mount for Drain3 state persistence. Add to Ansible playbooks as a new "ai" host group. GPU passthrough: deploy with nvidia-container-toolkit.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-docker">Docker</span>
@@ -638,7 +695,7 @@
       <div class="story-body">
         <div class="story-as">As a developer, I can trigger a real alert with load-test.sh and see the full pipeline execute end-to-end so that the MVP is proven to work.</div>
         <div class="story-title">End-to-end integration: alert &rarr; triage &rarr; LLM &rarr; RCA email</div>
-        <div class="story-desc">Run load-test.sh (small-scale) to trigger latency alert. Verify: Alertmanager fires &rarr; webhook received by triage service (check /decisions) &rarr; Prometheus + Loki context gathered &rarr; Ollama called &rarr; ESCALATE/DISMISS decision &rarr; email received with RCA. Check total pipeline latency under 60 seconds (excluding Alertmanager's own group_wait). This is the Sprint 2 demo &mdash; validates the architecture on a sample app before private cloud production deployment.</div>
+        <div class="story-desc">Run load-test.sh (small-scale) to trigger latency alert. Verify full pipeline with all layers: Alertmanager fires &rarr; webhook received by triage service (check /decisions) &rarr; Prometheus + Loki context gathered &rarr; Drain3 annotates anomalous log lines &rarr; Ollama reasons over enriched context &rarr; ESCALATE/DISMISS decision &rarr; email received with RCA including anomaly annotations. Check total pipeline latency under 60 seconds (excluding Alertmanager's own group_wait). This is the Sprint 2 demo &mdash; all layers of the implementation (observability, anomaly detection, LLM reasoning, notification) validated end-to-end.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-ai">Validation</span>
@@ -665,7 +722,7 @@
     <p>AI RCA (Epic 2) is the main deliverable. AWS setup (Epic 1) is a lightweight prerequisite &mdash; demo-only, small-scale, completed in 2&ndash;3 days. Development of the triage service can begin locally/in parallel before AWS is ready. After the demo, AWS is terminated and all further work moves to CIRES private cloud.</p>
     <ul>
       <li><strong>Milestone 1 (Day 3):</strong> AWS environment live &mdash; all services running, Ollama responding, dashboards green.</li>
-      <li><strong>Milestone 2 (Day 14):</strong> Alert fires &rarr; AI triage &rarr; RCA email received. Full pipeline working end-to-end.</li>
+      <li><strong>Milestone 2 (Day 14):</strong> Alert fires &rarr; Drain3 anomaly annotation &rarr; LLM triage &rarr; RCA email received. All layers working end-to-end.</li>
     </ul>
   </div>
 
@@ -707,12 +764,15 @@
     <div style="display:grid;grid-template-columns:140px 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="background:rgba(176,126,232,.06);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:16px;font-size:12px;font-weight:700;color:var(--accent-purple);text-transform:uppercase;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg);">AI RCA</div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
-        <div class="day-item ai"><span class="item-name">E2-07 LLM prompt template + JSON parser + ESCALATE/DISMISS logic</span><span class="item-time">Day 8&ndash;9 &middot; 1.5d</span></div>
-        <div class="day-item ai"><span class="item-name">E2-08 ESCALATE email: compose + send RCA via SMTP</span><span class="item-time">Day 9&ndash;10 &middot; 1d</span></div>
-        <div class="day-item ai"><span class="item-name">E2-11 Docker-compose for AI stack (triage service + Ollama + GPU)</span><span class="item-time">Day 10 &middot; 1d</span></div>
-        <div class="day-item ai"><span class="item-name">E2-10 Decision history dashboard (/decisions UI)</span><span class="item-time">Day 11 &middot; 0.5d</span></div>
-        <div class="day-item ai"><span class="item-name">Buffer: prompt tuning, edge cases (parse failures, Ollama cold start)</span><span class="item-time">Day 11&ndash;12 &middot; 1d</span></div>
-        <div class="day-item milestone"><span class="item-name">&#9873; E2-12 End-to-end demo: load-test.sh &rarr; alert &rarr; AI triage &rarr; RCA email</span><span class="item-time">Day 13&ndash;14 &middot; 0.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-13 Drain3 setup: log template mining + file persistence</span><span class="item-time">Day 8 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-14 Drain3 + Loki integration: anomaly-annotate log lines in context</span><span class="item-time">Day 9 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-07 LLM prompt template + JSON parser + ESCALATE/DISMISS logic</span><span class="item-time">Day 9&ndash;10 &middot; 1.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-08 ESCALATE email: compose + send RCA via SMTP</span><span class="item-time">Day 10&ndash;11 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-15 Drain3 observability: /drain3/stats + Prometheus metrics</span><span class="item-time">Day 11 &middot; 0.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-11 Docker-compose for AI stack (triage + Drain3 + Ollama + GPU)</span><span class="item-time">Day 11&ndash;12 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-10 Decision history dashboard (/decisions UI)</span><span class="item-time">Day 12 &middot; 0.5d</span></div>
+        <div class="day-item ai"><span class="item-name">Buffer: prompt tuning, Drain3 threshold tuning, edge cases</span><span class="item-time">Day 13 &middot; 0.5d</span></div>
+        <div class="day-item milestone"><span class="item-name">&#9873; E2-12 End-to-end: load-test &rarr; alert &rarr; Drain3 anomaly &rarr; LLM triage &rarr; RCA email</span><span class="item-time">Day 14 &middot; 0.5d</span></div>
       </div>
     </div>
   </div>
@@ -739,7 +799,7 @@
   </div>
 
   <div style="margin-top:28px;" class="note-box">
-    <strong>Future sprints (on CIRES private cloud):</strong> Private cloud deployment, container orchestration, IaC tooling, Drain3 anomaly detector, Jaeger MCP, WATCH state re-checker, deep prompt engineering, and full AI pipeline test suite. AWS is not part of any future sprint &mdash; all further work is on private cloud.
+    <strong>Future sprints (on CIRES private cloud):</strong> Private cloud deployment, IaC tooling, Jaeger MCP, WATCH state re-checker, deep prompt engineering, and full AI pipeline test suite. AWS is not part of any future sprint &mdash; all further work is on private cloud. Kubernetes is permanently out of scope.
   </div>
 
 </div>

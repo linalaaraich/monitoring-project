@@ -29,7 +29,7 @@
 - [Step 13 — Verification Checklist](#step-13)
 - [Appendix A — Troubleshooting](#appendix-a)
 - [Appendix B — File Map (every file and its purpose)](#appendix-b)
-- [Appendix C — Future Kubernetes Migration](#appendix-c)
+- [Appendix C — Future Enhancements](#appendix-c)
 
 ---
 
@@ -1497,33 +1497,23 @@ monitoring-project/
 ---
 
 <a name="appendix-c"></a>
-## Appendix C — Future Kubernetes Migration
+## Appendix C — Future Enhancements
 
-If you want to learn Kubernetes next, here's how you'd migrate this project:
+After the MVP demo (Sprint 2), the following enhancements are planned for deployment on CIRES private cloud:
 
-### What changes:
-| Docker Compose | Kubernetes Equivalent |
-|---|---|
-| `docker-compose.yml` | `Deployment` + `Service` YAML manifests |
-| `ports:` | `Service` of type `ClusterIP` or `NodePort` |
-| `volumes:` | `PersistentVolumeClaim` (PVC) |
-| `environment:` | `ConfigMap` or `Secret` |
-| `depends_on:` | Init containers or readiness probes |
-| `restart: unless-stopped` | Built-in (K8s restarts failed pods automatically) |
-| Ansible roles | Helm charts (templated K8s manifests) |
+### Sprint 2 MVP (in progress):
+- **Drain3 anomaly detection** — unsupervised log pattern clustering integrated into AI triage pipeline
+- **LLM triage service** — FastAPI + Ollama for automated root cause analysis
+- **Full AI RCA pipeline** — alert → context → anomaly detection → LLM reasoning → email notification
 
-### Suggested learning path:
-1. **Install k3s** (lightweight K8s) on your VMs: `curl -sfL https://get.k3s.io | sh -`
-2. **Start with one service** (e.g., Prometheus) — convert its Docker Compose to K8s manifests
-3. **Use Helm charts** where available (Prometheus, Grafana, Loki all have official Helm charts)
-4. **Learn in this order:** Pods → Deployments → Services → ConfigMaps → PVCs → Ingress → Helm
+### Future sprints (on private cloud):
+- Jaeger MCP + System Metadata MCP for richer AI context
+- WATCH state re-checker with APScheduler
+- Deep prompt engineering and AI pipeline test suite
+- Infrastructure as Code tooling for private cloud provisioning
+- Credential hardening with Ansible Vault
 
-### What stays the same:
-- The configuration files (prometheus.yml, loki-config.yml, jaeger-config.yaml) are identical
-- The networking concepts (ports, endpoints) are the same
-- The data flow (Prometheus scrapes, Promtail pushes to Loki, OTel sends to Jaeger) is unchanged
-
-The biggest change is **how you deploy** (kubectl/Helm instead of Ansible), not **what you deploy**.
+**Note:** Kubernetes is out of scope for this project. The deployment model is Ansible + docker-compose on VMs (CIRES private cloud).
 
 ---
 
@@ -1547,9 +1537,7 @@ You've built a complete observability platform:
 
 **To redeploy from scratch:** `ansible-playbook site.yml`
 
-**Next steps (future):**
-- Grafana alert rules
-- Drain3 anomaly detector
-- LLM triage service
-- MCP servers for AI-driven investigation
-- Kubernetes migration
+**Next steps:**
+- Drain3 anomaly detection + LLM triage service (Sprint 2 MVP, in progress)
+- Jaeger MCP + System Metadata MCP for richer AI context
+- Private cloud deployment (same Ansible playbooks, new inventory)
