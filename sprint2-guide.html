@@ -403,7 +403,7 @@
       </div>
       <div class="tl-body">
         <h4>FastAPI Triage Service</h4>
-        <p>Implement <span class="ic">roles/llm_triage/</span>. Build <span class="ic">context_fetcher.py</span>, <span class="ic">drain_analyzer.py</span>, <span class="ic">llm_client.py</span>, and <span class="ic">main.py</span> (webhook endpoint). Dockerfile + requirements. Unit-test each module independently.</p>
+        <p>Implement <span class="ic">roles/llm_triage/</span>. Build <span class="ic">context_fetcher.py</span> (Prometheus + Loki + Jaeger parallel fan-out), <span class="ic">drain_analyzer.py</span>, <span class="ic">llm_client.py</span>, <span class="ic">main.py</span> (webhook endpoints), and 5 MCP bridge servers (Prometheus <span class="ic">:8091</span>, Loki <span class="ic">:8092</span>, Jaeger <span class="ic">:8093</span>, Drain3 <span class="ic">:8094</span>, RCA History <span class="ic">:8095</span>). Dockerfile + requirements. Cross-pillar correlation via time window + trace_id. Unit-test each module independently.</p>
       </div>
     </div>
     <div class="tl-item">
@@ -1103,6 +1103,204 @@ LOKI_LIMIT     = int(os.getenv(<span class="str">"LOKI_LIMIT"</span>, <span clas
         <span class="kw">return</span> anomalous[:<span class="num">10</span>]  <span class="cm"># cap at 10 templates to keep prompt size manageable</span></code></pre>
   </div>
 
+  <div class="section-label">MCP Bridge Servers — LLM Data Access</div>
+
+  <div class="note-box purple">
+    <strong>Architecture:</strong> Five read-only MCP bridge servers run on the AI/LLM VM. The LLM calls these autonomously during investigation to gather evidence from all three observability pillars plus anomaly detection and historical context. Each MCP server is a lightweight FastAPI app (~80-100 lines) wrapping an existing HTTP API.
+  </div>
+
+  <div class="card" style="border-color:rgba(240,160,80,.25);">
+    <h3 style="color:var(--accent-orange);">Prometheus MCP (:8091) — roles/llm_triage/templates/mcp_servers/prometheus_mcp.py</h3>
+    <p style="margin-bottom:12px;">Wraps Prometheus HTTP API. Exposes instant queries, range queries, active alerts, and scrape target health. The LLM uses this to check metric values within the alert time window.</p>
+<pre><code><span class="kw">import</span> os, httpx
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+
+app = FastAPI(title=<span class="str">"Prometheus MCP"</span>, version=<span class="str">"1.0.0"</span>)
+PROMETHEUS_URL = os.getenv(<span class="str">"PROMETHEUS_URL"</span>, <span class="str">"http://prometheus:9090"</span>)
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/query_instant"</span>)
+<span class="kw">async def</span> <span class="fn">query_instant</span>(promql: str):
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/query"</span>, params={<span class="str">"query"</span>: promql})
+        <span class="kw">return</span> r.json()
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/query_range"</span>)
+<span class="kw">async def</span> <span class="fn">query_range</span>(promql: str, start: str, end: str, step: str = <span class="str">"60s"</span>):
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/query_range"</span>,
+                        params={<span class="str">"query"</span>: promql, <span class="str">"start"</span>: start, <span class="str">"end"</span>: end, <span class="str">"step"</span>: step})
+        <span class="kw">return</span> r.json()
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/get_alerts"</span>)
+<span class="kw">async def</span> <span class="fn">get_alerts</span>():
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/alerts"</span>)
+        <span class="kw">return</span> r.json()
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/get_targets"</span>)
+<span class="kw">async def</span> <span class="fn">get_targets</span>():
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{PROMETHEUS_URL}/api/v1/targets"</span>)
+        <span class="kw">return</span> r.json()</code></pre>
+    <div class="tags" style="margin-top:12px;">
+      <span class="tag tag-orange">:8091</span>
+      <span class="tag tag-muted">4 tools</span>
+      <span class="tag tag-green">Read-only</span>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(78,168,222,.25);">
+    <h3 style="color:var(--accent-blue);">Loki MCP (:8092) — roles/llm_triage/templates/mcp_servers/loki_mcp.py</h3>
+    <p style="margin-bottom:12px;">Wraps Loki HTTP API. Exposes log queries, label value discovery, and log volume aggregation. The LLM uses this to search for error patterns and correlate log entries with trace IDs.</p>
+<pre><code><span class="kw">import</span> os, httpx
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+
+app = FastAPI(title=<span class="str">"Loki MCP"</span>, version=<span class="str">"1.0.0"</span>)
+LOKI_URL = os.getenv(<span class="str">"LOKI_URL"</span>, <span class="str">"http://loki:3100"</span>)
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/query_logs"</span>)
+<span class="kw">async def</span> <span class="fn">query_logs</span>(logql: str, start: str, end: str, limit: int = <span class="num">50</span>):
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{LOKI_URL}/loki/api/v1/query_range"</span>,
+                        params={<span class="str">"query"</span>: logql, <span class="str">"start"</span>: start, <span class="str">"end"</span>: end,
+                                <span class="str">"limit"</span>: limit, <span class="str">"direction"</span>: <span class="str">"backward"</span>})
+        <span class="kw">return</span> r.json()
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/get_label_values"</span>)
+<span class="kw">async def</span> <span class="fn">get_label_values</span>(label: str):
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{LOKI_URL}/loki/api/v1/label/{label}/values"</span>)
+        <span class="kw">return</span> r.json()
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/get_log_volume"</span>)
+<span class="kw">async def</span> <span class="fn">get_log_volume</span>(logql: str, start: str, end: str):
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{LOKI_URL}/loki/api/v1/query_range"</span>,
+                        params={<span class="str">"query"</span>: f<span class="str">"count_over_time({logql} [5m])"</span>,
+                                <span class="str">"start"</span>: start, <span class="str">"end"</span>: end, <span class="str">"step"</span>: <span class="str">"300"</span>})
+        <span class="kw">return</span> r.json()</code></pre>
+    <div class="tags" style="margin-top:12px;">
+      <span class="tag tag-blue">:8092</span>
+      <span class="tag tag-muted">3 tools</span>
+      <span class="tag tag-green">Read-only</span>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(64,208,208,.25);">
+    <h3 style="color:var(--accent-cyan);">Jaeger MCP (:8093) — roles/llm_triage/templates/mcp_servers/jaeger_mcp.py</h3>
+    <p style="margin-bottom:12px;">Wraps Jaeger HTTP API. Exposes trace search (with tag filtering), full trace detail retrieval, service listing, and operation discovery. The LLM uses this to find error traces, inspect span-level failures, and correlate trace_id from logs to the full request path.</p>
+<pre><code><span class="kw">import</span> os, httpx
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+<span class="kw">from</span> typing <span class="kw">import</span> Optional
+
+app = FastAPI(title=<span class="str">"Jaeger MCP"</span>, version=<span class="str">"1.0.0"</span>)
+JAEGER_URL = os.getenv(<span class="str">"JAEGER_URL"</span>, <span class="str">"http://jaeger:16686"</span>)
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/find_traces"</span>)
+<span class="kw">async def</span> <span class="fn">find_traces</span>(service: str, start: str, end: str,
+                      operation: Optional[str] = <span class="kw">None</span>, limit: int = <span class="num">20</span>,
+                      tags: Optional[str] = <span class="kw">None</span>):
+    <span class="str">"""Search traces by service, time window, and optional tags (e.g. 'error=true')."""</span>
+    params = {<span class="str">"service"</span>: service, <span class="str">"start"</span>: start, <span class="str">"end"</span>: end, <span class="str">"limit"</span>: limit}
+    <span class="kw">if</span> operation:
+        params[<span class="str">"operation"</span>] = operation
+    <span class="kw">if</span> tags:
+        params[<span class="str">"tags"</span>] = tags  <span class="cm"># e.g. '{"error":"true","http.status_code":"500"}'</span>
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/traces"</span>, params=params)
+        data = r.json().get(<span class="str">"data"</span>, [])
+        <span class="cm"># Summarize: trace_id, root operation, duration, span count, error flag</span>
+        <span class="kw">return</span> [_summarize_trace(t) <span class="kw">for</span> t <span class="kw">in</span> data]
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/get_trace"</span>)
+<span class="kw">async def</span> <span class="fn">get_trace</span>(trace_id: str):
+    <span class="str">"""Get full trace detail — all spans with durations, status, and tags."""</span>
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/traces/{trace_id}"</span>)
+        <span class="kw">return</span> r.json()
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/get_services"</span>)
+<span class="kw">async def</span> <span class="fn">get_services</span>():
+    <span class="str">"""List all traced services."""</span>
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/services"</span>)
+        <span class="kw">return</span> r.json()
+
+<span class="dec">@app.get</span>(<span class="str">"/tools/get_operations"</span>)
+<span class="kw">async def</span> <span class="fn">get_operations</span>(service: str):
+    <span class="str">"""List operations for a service."""</span>
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">10</span>) <span class="kw">as</span> c:
+        r = <span class="kw">await</span> c.get(f<span class="str">"{JAEGER_URL}/api/operations"</span>, params={<span class="str">"service"</span>: service})
+        <span class="kw">return</span> r.json()
+
+<span class="kw">def</span> <span class="fn">_summarize_trace</span>(trace: dict) -> dict:
+    spans = trace.get(<span class="str">"spans"</span>, [])
+    root = spans[<span class="num">0</span>] <span class="kw">if</span> spans <span class="kw">else</span> {}
+    has_error = <span class="kw">any</span>(
+        tag.get(<span class="str">"key"</span>) == <span class="str">"error"</span> <span class="kw">and</span> tag.get(<span class="str">"value"</span>) == True
+        <span class="kw">for</span> s <span class="kw">in</span> spans <span class="kw">for</span> tag <span class="kw">in</span> s.get(<span class="str">"tags"</span>, [])
+    )
+    <span class="kw">return</span> {
+        <span class="str">"traceID"</span>: trace.get(<span class="str">"traceID"</span>),
+        <span class="str">"rootOperation"</span>: root.get(<span class="str">"operationName"</span>, <span class="str">"?"</span>),
+        <span class="str">"duration_ms"</span>: root.get(<span class="str">"duration"</span>, <span class="num">0</span>) / <span class="num">1000</span>,
+        <span class="str">"spanCount"</span>: <span class="fn">len</span>(spans),
+        <span class="str">"hasError"</span>: has_error,
+    }</code></pre>
+    <div class="tags" style="margin-top:12px;">
+      <span class="tag tag-cyan">:8093</span>
+      <span class="tag tag-muted">4 tools + summarizer</span>
+      <span class="tag tag-green">Read-only</span>
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="mini-card" style="border-color:rgba(224,208,96,.25);">
+      <h4 style="color:var(--accent-yellow);">Drain3 MCP (:8094)</h4>
+      <p>Wraps the in-memory Drain3 state maintained by the triage service. Exposes two tools:</p>
+      <ul>
+        <li><strong>/tools/get_clusters</strong> — Return all current log template clusters with counts and anomaly flags</li>
+        <li><strong>/tools/get_anomalies</strong> — Return only anomalous (rare/new/error) templates from the latest analysis window</li>
+      </ul>
+      <div class="tags" style="margin-top:10px;">
+        <span class="tag tag-yellow">:8094</span>
+        <span class="tag tag-muted">2 tools</span>
+        <span class="tag tag-green">Read-only</span>
+      </div>
+    </div>
+    <div class="mini-card" style="border-color:rgba(78,168,222,.25);">
+      <h4 style="color:var(--accent-blue);">RCA History MCP (:8095)</h4>
+      <p>Wraps the SQLite RCA history database. Lets the LLM check past incidents for recurring patterns:</p>
+      <ul>
+        <li><strong>/tools/search_history</strong> — Search past RCA reports by alert name, service, or time range</li>
+        <li><strong>/tools/get_rca</strong> — Get full detail of a specific past RCA report by ID</li>
+        <li><strong>/tools/get_stats</strong> — Aggregate stats: most common alerts, mean time to resolve, recurrence rate</li>
+      </ul>
+      <div class="tags" style="margin-top:10px;">
+        <span class="tag tag-blue">:8095</span>
+        <span class="tag tag-muted">3 tools</span>
+        <span class="tag tag-green">Read-only</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">Cross-Pillar Correlation Strategy</div>
+
+  <div class="card" style="border-color:rgba(176,126,232,.25);">
+    <h3 style="color:var(--accent-purple);">Four Correlation Patterns</h3>
+    <p style="margin-bottom:12px;">The LLM uses MCP bridges to cross-reference evidence across all three observability pillars. These are the four correlation patterns encoded in the prompt and tool definitions:</p>
+    <ul>
+      <li><strong>Time-based:</strong> All three pillars (Prometheus, Loki, Jaeger) are queried within the same alert time window (T-15m to T). This ensures metrics, logs, and traces are from the same incident period.</li>
+      <li><strong>Trace-log (trace_id):</strong> Extract <span class="ic">trace_id</span> from a Loki log entry (via Promtail's trace_id extraction pipeline) then call Jaeger MCP <span class="ic">get_trace(trace_id)</span> to see the full request path and pinpoint where the failure occurred at the span level.</li>
+      <li><strong>Trace-metric:</strong> Identify the failing service from Jaeger error spans (e.g., <span class="ic">hasError: true</span> on <span class="ic">spring-backend</span>), then query Prometheus MCP for that service's resource metrics (CPU saturation, memory pressure, error rate, connection pool usage).</li>
+      <li><strong>Log-metric (Drain3):</strong> Drain3 MCP flags anomalous log templates (new/rare patterns or high-frequency errors). The LLM cross-references these with Prometheus metrics to check whether the log anomaly corresponds to a metric anomaly (e.g., new "connection pool exhausted" log template + rising <span class="ic">hikaricp_connections_pending</span> metric).</li>
+    </ul>
+  </div>
+
+  <div class="note-box purple">
+    <strong>Prompt instruction:</strong> The LLM prompt explicitly instructs: "Always check all three pillars (metrics, logs, traces) within the alert time window before reaching a verdict." This ensures the RCA never relies on a single data source and always cross-validates findings.
+  </div>
+
   <div class="section-label">llm_client.py — Ollama API + Prompt Template</div>
 
   <div class="card">
@@ -1168,7 +1366,9 @@ LLM_TIMEOUT  = int(os.getenv(<span class="str">"LLM_TIMEOUT"</span>, <span class
 {context.get("traces_summary", "unavailable")}
 
 ## TASK
-Based on the alert, metrics, log anomalies, and trace data above, provide:
+Correlate evidence across all three observability pillars (metrics, logs, traces) within the alert time window. Use trace_id to link specific log entries to request traces. Use MCP bridges to gather additional data as needed.
+
+Provide:
 
 1. **Root Cause** (2–3 sentences): What is most likely causing this alert?
 2. **Evidence**: Which specific log patterns or metrics support your diagnosis?
