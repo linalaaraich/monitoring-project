@@ -12,7 +12,7 @@ This document justifies the AWS infrastructure costs required to host a **demo e
 
 All data — including LLM inference — stays within company-controlled infrastructure. **No data is sent to external AI APIs.**
 
-Infrastructure is provisioned with **Terraform** (IaC) and configured with the existing **Ansible** playbooks — the same playbooks used locally. Terraform provisions the AWS resources; Ansible deploys the observability stack on top.
+Infrastructure is provisioned with **Terraform** (IaC) and configured with **Ansible** playbooks. Terraform provisions the AWS resources (VPC, EC2, RDS, S3/CloudFront); Ansible deploys the observability stack, application, and AI RCA services on top.
 
 **Estimated cost: $82–$240 for the demo sprint (depending on usage schedule). AWS resources will be terminated after the demo.**
 
@@ -28,8 +28,12 @@ Infrastructure is provisioned with **Terraform** (IaC) and configured with the e
 
 ### What we're demonstrating
 - Full observability stack (metrics, logs, traces) monitoring a **small-scale sample application** (`react-springboot-mysql`)
-- AI-powered RCA: alert fires → system gathers context from Prometheus + Loki → self-hosted LLM analyzes → produces root cause analysis → sends email notification
-- End-to-end pipeline: load test → alert → AI triage → RCA email
+- **Three-layer AI RCA pipeline:**
+  - **Layer 1 (Detection):** Grafana Alerting (threshold-based rules) + Drain3 (unsupervised log anomaly detection) fire webhooks to the triage service
+  - **Layer 2 (Triage):** FastAPI triage service deduplicates, correlates, and decides whether an alert warrants LLM investigation — it is the sole gateway to developer notification
+  - **Layer 3 (LLM Analysis):** Self-hosted Ollama queries Prometheus, Loki, Jaeger, Drain3, and RCA history through MCP bridges to produce a root cause analysis and alert validity verdict
+- End-to-end pipeline: load test → Grafana alert fires → triage service evaluates → LLM investigates via MCP → valid alert + RCA report → email to developers
+- **No alert reaches a developer without passing through both AI evaluation layers** — reducing alert fatigue and ensuring only validated, actionable alerts are delivered
 - The monitored system is intentionally small-scale — the goal is to validate the AI RCA architecture, not to stress-test infrastructure
 
 ### Expected Impact
@@ -49,8 +53,8 @@ The monitored application is a **small-scale sample stack** (React + Spring Boot
 
 | Layer | Tool | What it does |
 |-------|------|-------------|
-| **Infrastructure** | Terraform | Provisions VPC, subnets, security groups, EC2 instances, RDS, S3/CloudFront, EBS volumes, Elastic IPs, and start/stop automation |
-| **Configuration** | Ansible | Deploys Docker, observability stack, backend application, and AI services onto the EC2 instances |
+| **Infrastructure** | Terraform | Provisions VPC, subnets, 5 security groups, 4 EC2 instances, RDS MySQL, S3 (frontend + Drain3 baselines), CloudFront CDN, EBS volumes, Elastic IPs, and start/stop automation |
+| **Configuration** | Ansible | Deploys Docker, observability stack (Prometheus, Grafana, Loki, Jaeger, OTel Collector), backend application, Kong, and AI services (Ollama, triage service, MCP servers, Drain3) onto the EC2 instances |
 
 Terraform outputs (instance IPs, RDS endpoint, S3 bucket name, CloudFront domain) feed directly into the Ansible inventory. This two-layer approach means:
 - Infrastructure is **reproducible** — `terraform apply` recreates the entire environment in minutes
@@ -61,10 +65,10 @@ Terraform outputs (instance IPs, RDS endpoint, S3 bucket name, CloudFront domain
 
 | VM | AWS Instance | Purpose | vCPUs | RAM | Storage |
 |----|-------------|---------|-------|-----|---------|
-| Monitoring VM | t3.large | Prometheus, Grafana, Loki, Jaeger, OTel Collector, Alertmanager | 2 | 8 GB | 50 GB gp3 |
+| Monitoring VM | t3.large | Prometheus, Grafana (dashboards + alerting), Loki, Jaeger, OTel Collector | 2 | 8 GB | 50 GB gp3 |
 | Backend VM | t3.small | Spring Boot API (no MySQL — database is on RDS) | 2 | 2 GB | 20 GB gp3 |
 | Network VM | t3.small | Kong API Gateway | 2 | 2 GB | 20 GB gp3 |
-| **AI/LLM VM** | **g4dn.xlarge** | **Ollama (self-hosted LLM), FastAPI RCA Triage Service** | **4** | **16 GB + 16 GB VRAM** | **50 GB gp3** |
+| **AI/LLM VM** | **g4dn.xlarge** | **Ollama (self-hosted LLM), FastAPI Triage Service, 5 MCP Servers, Drain3 anomaly detection** | **4** | **16 GB + 16 GB VRAM** | **50 GB gp3** |
 
 ### Managed Services
 
@@ -72,6 +76,7 @@ Terraform outputs (instance IPs, RDS endpoint, S3 bucket name, CloudFront domain
 |---------|-------------|---------|------|
 | **Database** | RDS db.t3.micro | MySQL (single-AZ) | 2 vCPUs, 1 GB RAM, 20 GB gp3 |
 | **Frontend** | S3 + CloudFront | React static build (HTML/JS/CSS) | Standard S3 bucket + CloudFront CDN |
+| **Drain3 Baselines** | S3 | Drain3 baseline snapshots for anomaly detection model state | Same S3 bucket, separate prefix |
 
 ### Why this architecture?
 
@@ -79,9 +84,9 @@ Terraform outputs (instance IPs, RDS endpoint, S3 bucket name, CloudFront domain
 - **S3 + CloudFront for React:** Static files don't need a running server. S3 hosting with CloudFront CDN is how production React apps are served — cheaper, faster, and more scalable than an Nginx container.
 - **RDS for MySQL:** Managed database with automated backups, patching, and a dedicated endpoint. Separating the database from the backend EC2 mirrors production best practices and avoids resource contention.
 - **t3.small (Backend):** Without MySQL co-located, Spring Boot alone needs minimal resources. 2 GB RAM is sufficient for a demo-scale API.
-- **t3.large (Monitoring):** Prometheus, Loki, and Jaeger need memory. 8 GB is comfortable for a demo-scale deployment with short retention.
+- **t3.large (Monitoring):** Prometheus, Grafana (including built-in alerting), Loki, Jaeger, and OTel Collector need memory. 8 GB is comfortable for a demo-scale deployment with short retention. Alertmanager is not needed — Grafana Alerting handles alert evaluation and sends webhooks directly to the triage service.
 - **t3.small (Network):** Kong in dbless mode is lightweight.
-- **g4dn.xlarge (AI/LLM):** Most cost-effective GPU instance. NVIDIA T4 (16 GB VRAM) runs quantized 7B–8B models (Mistral 7B, Llama 3 8B) with good inference speed. Sufficient for MVP demo.
+- **g4dn.xlarge (AI/LLM):** Most cost-effective GPU instance. NVIDIA T4 (16 GB VRAM) runs quantized 7B–8B models (Mistral 7B, Llama 3 8B) with good inference speed. Hosts the full AI stack: Ollama (LLM), FastAPI triage service with embedded Drain3, and 5 MCP bridge servers (Prometheus, Loki, Jaeger, Drain3, RCA History). Sufficient for MVP demo.
 
 ### Why not CPU-only for the LLM?
 
@@ -159,9 +164,11 @@ For maximum savings, stop all EC2 instances and RDS outside work hours (the demo
 
 | Requirement | Implementation |
 |------------|----------------|
-| **Self-hosted LLM** | Ollama running open-weight models (Llama 3 8B / Mistral 7B). No API calls to OpenAI, Anthropic, or any third-party. |
-| **Network isolation** | VPC with private subnets. RDS in private subnet (no public access). Only Grafana, Kong, and CloudFront exposed. Security groups limited to CIRES IP ranges. |
+| **Self-hosted LLM** | Ollama running open-weight models (Llama 3 8B / Mistral 7B). No API calls to OpenAI, Anthropic, or any third-party. All inference runs on the AI/LLM VM GPU within the private subnet. |
+| **Network isolation** | VPC with private subnets. 5 security groups (sg-monitoring, sg-backend, sg-network, sg-ai, sg-rds). RDS in private subnet (no public access). MCP servers internal-only (no public exposure). Only CloudFront and Kong exposed externally, limited to CIRES IP ranges. |
+| **AI pipeline security** | The triage service is the sole notification gateway — no alert reaches developers without AI evaluation. MCP bridges provide read-only access to data sources; the LLM cannot modify any data. RCA history stored in local SQLite on the AI/LLM VM. Drain3 baseline snapshots stored in S3 (encrypted at rest). |
 | **Access control** | SSH key-pair only. IAM user with scoped permissions. MFA enabled. All infrastructure defined in Terraform — no manual console changes. |
+| **Zero third-party plugins** | The observability stack uses no third-party or marketplace plugins. Kong's OTel and Prometheus plugins are built-in first-party. All other components are standalone CNCF/industry-standard services. Full audit in `docs/plugin-security-audit.md`. |
 | **No production data** | Demo uses the sample React + Spring Boot app. No real CIRES business data on AWS. |
 | **Demo-only** | AWS environment will be torn down immediately after the April 9 demo. No ongoing AWS usage. Production target is CIRES private cloud. |
 
@@ -175,7 +182,9 @@ For maximum savings, stop all EC2 instances and RDS outside work hours (the demo
 | **Teardown** | `terraform destroy` — all AWS resources removed | Terraform | Immediately after demo |
 | **Development & Production** | CIRES private cloud | Ansible (same playbooks) | Post-demo, TBD by management |
 
-The AWS deployment uses **Terraform** for infrastructure provisioning and **Ansible** for configuration. The production-like architecture (S3 frontend, EC2 backend, managed RDS, dedicated monitoring and AI instances) validates the same tier separation that will be used on CIRES private cloud. Migration to private cloud requires updating the Ansible inventory with new host IPs and swapping managed services (e.g., RDS → private cloud MySQL, S3 → private cloud object storage). The Terraform layer is AWS-specific. This portability is a key design choice: AWS is a temporary hosting vehicle for the demo, not a platform commitment.
+The AWS deployment uses **Terraform** for infrastructure provisioning and **Ansible** for configuration. The production-like architecture (S3 frontend, EC2 backend, managed RDS, dedicated monitoring, dedicated AI/LLM with three-layer RCA pipeline) validates the same tier separation and AI integration that will be used on CIRES private cloud. Migration to private cloud requires updating the Ansible inventory with new host IPs and swapping managed services (e.g., RDS → private cloud MySQL, S3 → private cloud object storage, S3 Drain3 snapshots → private cloud object storage). The Terraform layer is AWS-specific. This portability is a key design choice: AWS is a temporary hosting vehicle for the demo, not a platform commitment.
+
+For full architectural detail — including the three-layer AI RCA pipeline, MCP bridge specifications, Drain3 baseline management, and RCA history storage — see `docs/architecture-ai-rca-pipeline.md`. For the plugin and extension security audit, see `docs/plugin-security-audit.md`.
 
 ---
 
@@ -186,9 +195,10 @@ The AWS deployment uses **Terraform** for infrastructure provisioning and **Ansi
 | **What** | Production-like AWS environment: 4 EC2 instances (3 standard + 1 GPU), RDS MySQL, S3 + CloudFront |
 | **Why** | AI RCA demo on April 9; local machines lack GPU for LLM inference; production-like architecture validates the design before private cloud migration |
 | **Provisioning** | **Terraform** (infrastructure) + **Ansible** (configuration) — fully automated, version-controlled |
-| **Architecture** | S3/CloudFront (frontend) + EC2 (backend) + RDS (database) + EC2 (monitoring) + EC2 GPU (AI/LLM) — mirrors production tier separation |
+| **Architecture** | S3/CloudFront (frontend) + EC2 (backend) + RDS (database) + EC2 (monitoring with Grafana Alerting) + EC2 GPU (Ollama + Triage Service + 5 MCP bridges + Drain3) |
+| **AI RCA pipeline** | Three layers: Grafana Alerting + Drain3 (detection) → FastAPI Triage Service (smart routing, sole notification gateway) → Ollama LLM via MCP bridges (deep analysis + RCA). No alert reaches devs without AI evaluation. |
 | **Scope** | Small-scale sample app (`react-springboot-mysql`), not production workloads |
 | **Duration** | Demo only — AWS resources terminated immediately after April 9 demo |
 | **Cost** | **~$82–$240** depending on usage schedule (work hours only recommended) |
-| **Data safety** | Self-hosted LLM, no external APIs, sample data only, VPC isolated, RDS in private subnet |
+| **Data safety** | Self-hosted LLM, no external APIs, zero third-party plugins, sample data only, VPC isolated, RDS in private subnet, MCP bridges read-only |
 | **Exit plan** | `terraform destroy` removes all AWS resources. All further work on CIRES private cloud. |
