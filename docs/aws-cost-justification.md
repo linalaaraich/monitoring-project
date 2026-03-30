@@ -12,6 +12,8 @@ This document justifies the AWS infrastructure costs required to host a **demo e
 
 All data — including LLM inference — stays within company-controlled infrastructure. **No data is sent to external AI APIs.**
 
+Infrastructure is provisioned with **Terraform** (IaC) and configured with the existing **Ansible** playbooks — the same playbooks used locally. Terraform provisions the AWS resources; Ansible deploys the observability stack on top.
+
 **Estimated cost: $88–$250 for the demo sprint (depending on usage schedule). AWS resources will be terminated after the demo.**
 
 ---
@@ -40,6 +42,18 @@ All data — including LLM inference — stays within company-controlled infrast
 ## 3. Architecture — Small-Scale Demo
 
 The demo mirrors the existing 3-VM local setup plus one GPU instance for AI inference. The monitored application is a **small-scale sample stack** (React + Spring Boot + MySQL) generating minimal traffic via a load-test script — not production workloads.
+
+### Provisioning Approach: Terraform + Ansible
+
+| Layer | Tool | What it does |
+|-------|------|-------------|
+| **Infrastructure** | Terraform | Provisions VPC, subnets, security groups, EC2 instances, EBS volumes, Elastic IPs, and start/stop automation |
+| **Configuration** | Ansible | Deploys Docker, observability stack, application, and AI services using the same playbooks as the local environment |
+
+Terraform outputs (instance IPs) feed directly into the Ansible inventory. This two-layer approach means:
+- Infrastructure is **reproducible** — `terraform apply` recreates the entire environment in minutes
+- **Teardown is instant** — `terraform destroy` removes all AWS resources cleanly after the demo
+- **No manual console work** — everything is version-controlled and auditable
 
 | VM | AWS Instance | Purpose | vCPUs | RAM | Storage |
 |----|-------------|---------|-------|-----|---------|
@@ -112,11 +126,12 @@ For maximum savings, stop all instances outside work hours (the demo app doesn't
 
 | Measure | Detail |
 |---------|--------|
-| **Start/stop schedule** | Cron script or AWS Lambda stops all instances outside 8:00–18:00 MAT. No need for 24/7 uptime — this is a demo environment. |
+| **Terraform destroy** | **Single command tears down all AWS resources.** No orphaned instances or forgotten volumes. `terraform destroy` is the exit plan. |
+| **Start/stop schedule** | Terraform-provisioned Lambda or EventBridge rule stops all instances outside 8:00–18:00 MAT. No need for 24/7 uptime — this is a demo environment. |
 | **Billing alerts** | CloudWatch billing alarm at $100, $200, and $300 thresholds → email notification |
-| **Resource tagging** | All resources tagged `project:observability-rca`, `environment:demo`, `team:cires-intern` for cost tracking |
-| **Teardown plan** | **All AWS resources are terminated immediately after the demo.** No ongoing AWS usage — production and further development will be on CIRES private cloud. |
-| **Spot instances** | g4dn.xlarge spot is ~$0.16–0.20/hr (60–70% cheaper). Viable for pre-demo testing, not for demo day itself. |
+| **Resource tagging** | All resources tagged `project:observability-rca`, `environment:demo`, `team:cires-intern` for cost tracking (enforced in Terraform) |
+| **Teardown plan** | **All AWS resources are terminated immediately after the demo** via `terraform destroy`. No ongoing AWS usage — production and further development will be on CIRES private cloud. |
+| **Spot instances** | g4dn.xlarge spot is ~$0.16–0.20/hr (60–70% cheaper). Viable for pre-demo testing, not for demo day itself. Can be toggled via a Terraform variable. |
 
 ---
 
@@ -126,7 +141,7 @@ For maximum savings, stop all instances outside work hours (the demo app doesn't
 |------------|----------------|
 | **Self-hosted LLM** | Ollama running open-weight models (Llama 3 8B / Mistral 7B). No API calls to OpenAI, Anthropic, or any third-party. |
 | **Network isolation** | VPC with private subnets. Only Grafana and Kong exposed via security groups limited to CIRES IP ranges. |
-| **Access control** | SSH key-pair only. IAM user with scoped permissions. MFA enabled. |
+| **Access control** | SSH key-pair only. IAM user with scoped permissions. MFA enabled. All infrastructure defined in Terraform — no manual console changes. |
 | **No production data** | Demo uses the sample React + Spring Boot app. No real CIRES business data on AWS. |
 | **Demo-only** | AWS environment will be torn down immediately after the April 9 demo. No ongoing AWS usage. Production target is CIRES private cloud. |
 
@@ -134,13 +149,13 @@ For maximum savings, stop all instances outside work hours (the demo app doesn't
 
 ## 7. AWS vs Private Cloud Roadmap
 
-| Phase | Infrastructure | Timeline |
-|-------|---------------|----------|
-| **Demo** | AWS EC2 (this request) | April 9, 2026 |
-| **Teardown** | Terminate all AWS resources | Immediately after demo |
-| **Development & Production** | CIRES private cloud | Post-demo, TBD by management |
+| Phase | Infrastructure | Tooling | Timeline |
+|-------|---------------|---------|----------|
+| **Demo** | AWS EC2 (this request) | Terraform + Ansible | April 9, 2026 |
+| **Teardown** | `terraform destroy` — all AWS resources removed | Terraform | Immediately after demo |
+| **Development & Production** | CIRES private cloud | Ansible (same playbooks) | Post-demo, TBD by management |
 
-The AWS deployment uses the same Ansible playbooks and docker-compose templates as the local environment. Migration to private cloud requires only updating the inventory file with new host IPs — no architectural changes. This portability is a key design choice: AWS is a temporary hosting vehicle for the demo, not a platform commitment.
+The AWS deployment uses **Terraform** for infrastructure provisioning and the **same Ansible playbooks and docker-compose templates** as the local environment. Migration to private cloud requires only updating the Ansible inventory file with new host IPs — no architectural changes. The Terraform layer is AWS-specific and will not be needed on private cloud. This portability is a key design choice: AWS is a temporary hosting vehicle for the demo, not a platform commitment.
 
 ---
 
@@ -150,8 +165,9 @@ The AWS deployment uses the same Ansible playbooks and docker-compose templates 
 |------|--------|
 | **What** | 4 EC2 instances (3 standard + 1 GPU) for demo environment |
 | **Why** | AI RCA demo on April 9; local machines lack GPU for LLM inference |
+| **Provisioning** | **Terraform** (infrastructure) + **Ansible** (configuration) — fully automated, version-controlled |
 | **Scope** | Small-scale sample app (`react-springboot-mysql`), not production workloads |
 | **Duration** | Demo only — AWS resources terminated immediately after April 9 demo |
 | **Cost** | **~$88–$250** depending on usage schedule (work hours only recommended) |
 | **Data safety** | Self-hosted LLM, no external APIs, sample data only, VPC isolated |
-| **Exit plan** | Terminate all AWS resources after demo. All further work on CIRES private cloud. |
+| **Exit plan** | `terraform destroy` removes all AWS resources. All further work on CIRES private cloud. |
