@@ -225,7 +225,7 @@
   <div class="tab"           onclick="switchTab('aws')">AWS Demo Setup</div>
   <div class="tab"           onclick="switchTab('ollama')">Ollama Setup</div>
   <div class="tab"           onclick="switchTab('fastapi')">FastAPI Triage Service</div>
-  <div class="tab"           onclick="switchTab('alertmanager')">Alertmanager Integration</div>
+  <div class="tab"           onclick="switchTab('alertmanager')">Grafana Alerting Integration</div>
   <div class="tab"           onclick="switchTab('e2e')">End-to-End Test</div>
   <div class="tab"           onclick="switchTab('grafana')">Grafana Dashboard</div>
 </div>
@@ -250,8 +250,8 @@
       <div class="stat-label">New roles</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-green)">3</div>
-      <div class="stat-label">Modified files</div>
+      <div class="stat-val" style="color:var(--accent-green)">5</div>
+      <div class="stat-label">MCP servers</div>
     </div>
     <div class="stat-card">
       <div class="stat-val" style="color:var(--accent-blue)">:8090</div>
@@ -277,7 +277,7 @@
     </div>
     <div class="mini-card" style="border-color:rgba(176,126,232,.3);">
       <h4 style="color:var(--accent-purple);">Epic 2 — AI RCA MVP</h4>
-      <p>FastAPI webhook receiver queries Prometheus, Loki, and Jaeger for context. Drain3 clusters log lines to surface anomalous templates. Enriched context sent to Ollama (llama3:8b). LLM generates RCA report, emailed via Alertmanager.</p>
+      <p>Grafana Alerting and Drain3 send webhooks to a FastAPI triage service. The LLM autonomously queries Prometheus, Loki, Jaeger, Drain3, and RCA History via MCP bridges to gather context. Ollama (llama3:8b) generates an RCA report, emailed directly via SMTP.</p>
       <div class="tags"><span class="tag tag-purple">7–8 days</span><span class="tag tag-must">Top Priority</span></div>
     </div>
   </div>
@@ -285,56 +285,63 @@
   <div class="section-label">AI RCA Architecture</div>
 
   <div class="arch-diagram">
-    <div class="arch-row">
-      <div class="arch-box box-alert">Prometheus<small>alert fires</small></div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-box box-alert">Alertmanager<small>:9093</small></div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-box box-fastapi">FastAPI Triage<small>:8090  POST /webhook</small></div>
-    </div>
-
-    <div class="arch-arrow-down" style="margin:4px 0 2px">↓</div>
-    <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:6px;">gather context in parallel</div>
-
+    <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:6px;">LAYER 1 — Detection</div>
     <div class="arch-branch">
       <div class="arch-branch-col">
-        <div class="arch-box box-prom">Prometheus<small>instant query</small></div>
+        <div class="arch-box box-alert">Grafana Alerting<small>built into :3000</small></div>
       </div>
       <div class="arch-branch-col">
-        <div class="arch-box box-loki">Loki<small>last 200 log lines</small></div>
-      </div>
-      <div class="arch-branch-col">
-        <div class="arch-box box-jaeger">Jaeger<small>recent traces</small></div>
+        <div class="arch-box box-drain">Drain3<small>log anomaly detection</small></div>
       </div>
     </div>
 
-    <div class="arch-arrow-down" style="margin:4px 0 2px">↓</div>
-    <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:6px;">anomaly detection</div>
+    <div class="arch-arrow-down" style="margin:4px 0 2px">↓ webhooks</div>
 
+    <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:6px;">LAYER 2 — Triage</div>
     <div class="arch-row">
-      <div class="arch-box box-drain">Drain3<small>log clustering (in-process)</small></div>
+      <div class="arch-box box-fastapi">FastAPI Triage<small>:8090  dedup + correlate + route</small></div>
     </div>
 
     <div class="arch-arrow-down" style="margin:4px 0 2px">↓</div>
-    <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:6px;">LLM reasoning — self-hosted only</div>
+    <div style="text-align:center;font-size:11px;color:var(--muted);margin-bottom:6px;">LAYER 3 — LLM uses MCP bridges autonomously</div>
 
     <div class="arch-row">
       <div class="arch-box box-ollama">Ollama<small>:11434  llama3:8b</small></div>
     </div>
 
+    <div class="arch-arrow-down" style="margin:4px 0 2px">↕ MCP tool calls</div>
+
+    <div class="arch-branch">
+      <div class="arch-branch-col">
+        <div class="arch-box box-prom">Prometheus MCP<small>:8091</small></div>
+      </div>
+      <div class="arch-branch-col">
+        <div class="arch-box box-loki">Loki MCP<small>:8092</small></div>
+      </div>
+      <div class="arch-branch-col">
+        <div class="arch-box box-jaeger">Jaeger MCP<small>:8093</small></div>
+      </div>
+      <div class="arch-branch-col">
+        <div class="arch-box box-drain">Drain3 MCP<small>:8094</small></div>
+      </div>
+      <div class="arch-branch-col">
+        <div class="arch-box box-output">RCA History MCP<small>:8095</small></div>
+      </div>
+    </div>
+
     <div class="arch-arrow-down" style="margin:4px 0 2px">↓</div>
 
     <div class="arch-row">
-      <div class="arch-box box-output">RCA Report (JSON + email)</div>
+      <div class="arch-box box-output">RCA Report (JSON + email via SMTP)</div>
     </div>
   </div>
 
   <div class="section-label">New Services at a Glance</div>
 
-  <div class="two-col">
+  <div class="card-grid">
     <div class="card" style="border-color:rgba(176,126,232,.25);margin-bottom:0;">
       <h3 style="color:var(--accent-purple);">🤖 llm-triage (FastAPI :8090)</h3>
-      <p>Receives Alertmanager webhook POSTs. Queries Prometheus, Loki, and Jaeger APIs to gather metric and log context around the alert window. Runs Drain3 log clustering in-process to identify anomalous log templates. Builds an enriched prompt and calls the local Ollama API. Returns the RCA as JSON; optionally triggers email via Alertmanager.</p>
+      <p>Receives webhook POSTs from Grafana Alerting and Drain3. Deduplicates, correlates, and routes alerts. Calls Ollama with MCP tool definitions so the LLM autonomously queries Prometheus, Loki, Jaeger, Drain3 state, and RCA History. Returns the RCA as JSON; sends email directly via SMTP when the LLM confirms a valid alert.</p>
       <div class="tags" style="margin-top:14px;">
         <span class="tag tag-purple">Python 3.11</span>
         <span class="tag tag-blue">FastAPI</span>
@@ -344,11 +351,21 @@
     </div>
     <div class="card" style="border-color:rgba(107,207,127,.25);margin-bottom:0;">
       <h3 style="color:var(--accent-green);">🦙 Ollama (:11434)</h3>
-      <p>Self-hosted LLM inference engine running inside Docker on <strong>monitoring-vm</strong>. Hosts <code class="ic">llama3:8b</code> (fallback: <code class="ic">mistral:7b</code>). Requires 8 GB RAM headroom on monitoring-vm. All inference stays on-premise — no external API calls, no data leaves the network.</p>
+      <p>Self-hosted LLM inference engine running inside Docker on the <strong>AI/LLM VM (g4dn.xlarge)</strong>. Hosts <code class="ic">llama3:8b</code> (fallback: <code class="ic">mistral:7b</code>). Uses the T4 GPU (16 GB VRAM) for accelerated inference. All inference stays on-premise — no external API calls, no data leaves the network.</p>
       <div class="tags" style="margin-top:14px;">
         <span class="tag tag-green">ollama/ollama:latest</span>
-        <span class="tag tag-orange">8 GB RAM</span>
+        <span class="tag tag-orange">T4 GPU (16 GB VRAM)</span>
         <span class="tag tag-must">No external APIs</span>
+      </div>
+    </div>
+    <div class="card" style="border-color:rgba(64,208,208,.25);margin-bottom:0;">
+      <h3 style="color:var(--accent-cyan);">🔌 MCP Servers (:8091–:8095)</h3>
+      <p>Five read-only MCP bridge servers on the AI/LLM VM. The LLM calls these autonomously during investigation: <strong>Prometheus MCP</strong> (:8091) for PromQL queries, <strong>Loki MCP</strong> (:8092) for log search, <strong>Jaeger MCP</strong> (:8093) for trace analysis, <strong>Drain3 MCP</strong> (:8094) for anomaly stats, and <strong>RCA History MCP</strong> (:8095) for past decisions.</p>
+      <div class="tags" style="margin-top:14px;">
+        <span class="tag tag-cyan">5 servers</span>
+        <span class="tag tag-blue">FastAPI</span>
+        <span class="tag tag-green">Read-only</span>
+        <span class="tag tag-muted">~100 MB RAM each</span>
       </div>
     </div>
   </div>
@@ -396,8 +413,8 @@
         <div class="tl-line"></div>
       </div>
       <div class="tl-body">
-        <h4>Alertmanager Integration</h4>
-        <p>Add <span class="ic">ai-rca</span> receiver to <span class="ic">alertmanager.yml.j2</span>. Route critical alerts. Fire test alert with <span class="ic">amtool</span>. Verify full webhook → RCA pipeline end-to-end.</p>
+        <h4>Grafana Alerting Integration</h4>
+        <p>Configure Grafana webhook contact point to <span class="ic">http://ai-vm:8090/webhook/grafana</span>. Create alert rules via YAML provisioning. Fire test alert from Grafana UI. Verify full webhook → triage → LLM → email pipeline end-to-end.</p>
       </div>
     </div>
     <div class="tl-item">
@@ -446,14 +463,26 @@
   <span class="ft-new">    ├── defaults/main.yml</span>
   <span class="ft-new">    └── tasks/main.yml</span>
 <span class="ft-dir">playbooks/templates/</span>
-  <span class="ft-mod">├── monitoring-compose.yml.j2    </span><span class="ft-comment">← MODIFY: add llm-triage + ollama services</span>
-  <span class="ft-mod">└── application-compose.yml.j2   </span><span class="ft-comment">← MODIFY: remove MySQL container (now on RDS), update Spring datasource URL</span>
-<span class="ft-dir">roles/alertmanager/templates/</span>
-  <span class="ft-mod">└── alertmanager.yml.j2          </span><span class="ft-comment">← MODIFY: add ai-rca webhook receiver</span>
+  <span class="ft-mod">├── monitoring-compose.yml.j2    </span><span class="ft-comment">← MODIFY: remove alertmanager, add Grafana alerting config</span>
+  <span class="ft-mod">├── application-compose.yml.j2   </span><span class="ft-comment">← MODIFY: remove MySQL container (now on RDS), update Spring datasource URL</span>
+  <span class="ft-new">└── ai-compose.yml.j2            </span><span class="ft-comment">← NEW: Ollama + triage + MCP servers for AI/LLM VM</span>
+<span class="ft-dir">roles/grafana/</span>
+  <span class="ft-new">└── files/provisioning/alerting/  </span><span class="ft-comment">← NEW: Grafana alert rule provisioning YAML</span>
+  <span class="ft-new">    ├── alert-rules.yml          </span><span class="ft-comment">← NEW: migrated Prometheus alert rules</span>
+  <span class="ft-new">    └── contact-points.yml       </span><span class="ft-comment">← NEW: webhook contact point → triage :8090</span>
+<span class="ft-dir">roles/llm_triage/templates/</span>
+  <span class="ft-new">├── mcp_servers/                 </span><span class="ft-comment">← NEW: MCP bridge server code</span>
+  <span class="ft-new">│   ├── prometheus_mcp.py        </span><span class="ft-comment">← NEW: :8091 Prometheus MCP bridge</span>
+  <span class="ft-new">│   ├── loki_mcp.py              </span><span class="ft-comment">← NEW: :8092 Loki MCP bridge</span>
+  <span class="ft-new">│   ├── jaeger_mcp.py            </span><span class="ft-comment">← NEW: :8093 Jaeger MCP bridge</span>
+  <span class="ft-new">│   ├── drain3_mcp.py            </span><span class="ft-comment">← NEW: :8094 Drain3 MCP bridge</span>
+  <span class="ft-new">│   └── rca_history_mcp.py       </span><span class="ft-comment">← NEW: :8095 RCA History MCP bridge</span>
 <span class="ft-dir">playbooks/</span>
-  <span class="ft-mod">└── monitoring.yml               </span><span class="ft-comment">← MODIFY: add llm_triage + ollama roles</span>
+  <span class="ft-mod">├── monitoring.yml               </span><span class="ft-comment">← MODIFY: remove alertmanager role</span>
+  <span class="ft-new">└── ai.yml                       </span><span class="ft-comment">← NEW: deploy Ollama + triage + MCP to AI/LLM VM</span>
 <span class="ft-dir">inventory/group_vars/</span>
-  <span class="ft-mod">├── monitoring.yml               </span><span class="ft-comment">← MODIFY: add ollama_model, triage vars</span>
+  <span class="ft-mod">├── monitoring.yml               </span><span class="ft-comment">← MODIFY: remove alertmanager vars</span>
+  <span class="ft-new">├── ai.yml                       </span><span class="ft-comment">← NEW: ollama_model, triage vars, SMTP creds</span>
   <span class="ft-new">└── aws.yml                      </span><span class="ft-comment">← NEW: EC2 public IPs + RDS endpoint override</span>
   </div>
 
@@ -508,7 +537,7 @@
         <tbody>
           <tr><td rowspan="4">sg-monitoring</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
           <tr><td>3000</td><td>your IP</td><td>Grafana UI</td></tr>
-          <tr><td>9090, 9093</td><td>your IP</td><td>Prometheus, Alertmanager</td></tr>
+          <tr><td>9090</td><td>your IP</td><td>Prometheus</td></tr>
           <tr><td>3100, 4317, 4318, 16686</td><td>private subnet</td><td>Loki, OTel, Jaeger (internal)</td></tr>
           <tr><td rowspan="2">sg-backend</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
           <tr><td>9100, 8081</td><td>private subnet</td><td>Exporters. <em>No MySQL (3306) or MySQL exporter (9104) — MySQL is on RDS.</em></td></tr>
@@ -516,7 +545,7 @@
           <tr><td>8000, 8001</td><td>0.0.0.0/0</td><td>Kong proxy + admin</td></tr>
           <tr><td>9100, 8081</td><td>private subnet</td><td>Exporters</td></tr>
           <tr><td rowspan="3">sg-ai</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
-          <tr><td>8090</td><td>private subnet</td><td>FastAPI triage (Alertmanager → triage)</td></tr>
+          <tr><td>8090</td><td>sg-monitoring</td><td>FastAPI triage (Grafana webhook → triage)</td></tr>
           <tr><td>11434</td><td>private subnet</td><td>Ollama LLM API (internal only)</td></tr>
           <tr><td>sg-rds</td><td>3306</td><td>private subnet</td><td>MySQL. Only accessible from backend-vm and monitoring-vm (Prometheus) within the VPC.</td></tr>
         </tbody>
@@ -610,7 +639,7 @@ ansible-playbook -i inventory/aws.yml playbooks/network.yml</code></pre>
         <li><div class="chk"></div><strong>RDS MySQL</strong> — from backend-vm: <code class="ic">mysql -h RDS_ENDPOINT -u app_user -p -e "SELECT 1"</code> connects successfully</li>
         <li><div class="chk"></div><strong>S3/CloudFront frontend</strong> — open CloudFront distribution URL in browser, React app loads correctly</li>
         <li><div class="chk"></div><strong>Kong metrics</strong> — http://MONITORING_IP:9090/graph?g0.expr=kong_http_requests_total — non-zero</li>
-        <li><div class="chk"></div><strong>Alertmanager</strong> — http://MONITORING_IP:9093 loads, no active alerts</li>
+        <li><div class="chk"></div><strong>Grafana Alerting</strong> — Grafana &gt; Alerting &gt; Alert rules page loads, contact point configured to triage service webhook</li>
       </ul>
     </div>
   </div>
@@ -686,8 +715,9 @@ ansible-playbook -i inventory/aws.yml playbooks/network.yml</code></pre>
   <div class="section-label">2 — Docker Compose Service Definition</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-green);">Add to playbooks/templates/monitoring-compose.yml.j2</h3>
-<pre><code>  <span class="cm"># --- Add these two services to the existing services: block ---</span>
+    <h3 style="color:var(--accent-green);">Add to playbooks/templates/ai-compose.yml.j2 (AI/LLM VM)</h3>
+    <p style="margin-bottom:12px;">Ollama, the triage service, and MCP servers run on the dedicated AI/LLM VM (g4dn.xlarge with GPU), not on monitoring-vm. They connect to the monitoring stack services over the private network.</p>
+<pre><code>  <span class="cm"># --- AI/LLM VM docker-compose services ---</span>
 
   <span class="kw">llm-triage</span>:
     <span class="var">build</span>: /opt/stack/llm-triage
@@ -697,13 +727,17 @@ ansible-playbook -i inventory/aws.yml playbooks/network.yml</code></pre>
     <span class="var">ports</span>:
       - <span class="str">"8090:8090"</span>
     <span class="var">environment</span>:
-      <span class="var">PROMETHEUS_URL</span>: <span class="str">http://prometheus:9090</span>
-      <span class="var">LOKI_URL</span>: <span class="str">http://loki:3100</span>
-      <span class="var">JAEGER_URL</span>: <span class="str">http://jaeger:16686</span>
+      <span class="var">PROMETHEUS_URL</span>: <span class="str">http://{{ monitoring_private_ip }}:9090</span>
+      <span class="var">LOKI_URL</span>: <span class="str">http://{{ monitoring_private_ip }}:3100</span>
+      <span class="var">JAEGER_URL</span>: <span class="str">http://{{ monitoring_private_ip }}:16686</span>
       <span class="var">OLLAMA_URL</span>: <span class="str">http://ollama:11434</span>
       <span class="var">OLLAMA_MODEL</span>: <span class="str">{{ ollama_model }}</span>
-    <span class="var">depends_on</span>: [prometheus, loki, jaeger, ollama]
-    <span class="var">networks</span>: [monitoring]
+      <span class="var">SMTP_HOST</span>: <span class="str">smtp.gmail.com</span>
+      <span class="var">SMTP_PORT</span>: <span class="str">587</span>
+      <span class="var">SMTP_USER</span>: <span class="str">{{ gmail_user }}</span>
+      <span class="var">SMTP_PASS</span>: <span class="str">{{ gmail_app_password }}</span>
+    <span class="var">depends_on</span>: [ollama]
+    <span class="var">networks</span>: [ai]
     <span class="var">logging</span>:
       <span class="var">driver</span>: json-file
       <span class="var">options</span>: { max-size: <span class="str">"20m"</span>, max-file: <span class="str">"3"</span> }
@@ -716,13 +750,15 @@ ansible-playbook -i inventory/aws.yml playbooks/network.yml</code></pre>
       - <span class="str">"11434:11434"</span>
     <span class="var">volumes</span>:
       - <span class="str">{{ ollama_data_dir }}:/root/.ollama</span>
-    <span class="var">networks</span>: [monitoring]
+    <span class="var">deploy</span>:
+      <span class="var">resources</span>:
+        <span class="var">reservations</span>:
+          <span class="var">devices</span>:
+            - <span class="var">capabilities</span>: [gpu]
+    <span class="var">networks</span>: [ai]
     <span class="var">logging</span>:
       <span class="var">driver</span>: json-file
-      <span class="var">options</span>: { max-size: <span class="str">"50m"</span>, max-file: <span class="str">"3"</span> }
-
-  <span class="cm"># --- Also add to the volumes: block at the bottom ---</span>
-  <span class="cm"># ollama_data is a bind-mount (directory above), no named volume needed</span></code></pre>
+      <span class="var">options</span>: { max-size: <span class="str">"50m"</span>, max-file: <span class="str">"3"</span> }</code></pre>
   </div>
 
   <div class="section-label">3 — Verify Ollama is Responding</div>
@@ -738,7 +774,7 @@ docker exec ollama ollama list
 <span class="cm"># Pull the model if not already done</span>
 docker exec ollama ollama pull llama3:8b
 
-<span class="cm"># Quick smoke test (run from monitoring-vm)</span>
+<span class="cm"># Quick smoke test (run from ai-vm)</span>
 curl -s http://localhost:11434/api/generate \
   -d '{"model":"llama3:8b","prompt":"Reply with just: OK","stream":false}' \
   | python3 -m json.tool
@@ -749,14 +785,14 @@ curl -s http://localhost:11434/api/generate \
 free -h
 docker stats ollama --no-stream</code></pre>
     <div class="note-box warn" style="margin-top:12px;margin-bottom:0;">
-      <strong>RAM budget:</strong> llama3:8b loads ~4.5 GB of model weights. With OS overhead, plan for 6 GB total. If monitoring-vm only has 4 GB, switch to <span class="ic">mistral:7b</span> (fits in ~5 GB) or a lighter model like <span class="ic">phi3:mini</span> (2.3 GB). Update <span class="ic">ollama_model</span> in <span class="ic">inventory/group_vars/monitoring.yml</span>.
+      <strong>GPU inference:</strong> llama3:8b loads entirely into the T4 GPU (16 GB VRAM) for fast inference. The g4dn.xlarge has 16 GB system RAM for the triage service, MCP servers, and OS. If GPU issues arise, Ollama falls back to CPU mode automatically. Update <span class="ic">ollama_model</span> in <span class="ic">inventory/group_vars/ai.yml</span>.
     </div>
   </div>
 
-  <div class="section-label">4 — Add Variables to monitoring.yml</div>
+  <div class="section-label">4 — Add Variables to ai.yml</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-green);">inventory/group_vars/monitoring.yml — add these variables</h3>
+    <h3 style="color:var(--accent-green);">inventory/group_vars/ai.yml — add these variables</h3>
 <pre><code><span class="cm"># Ollama LLM service</span>
 <span class="var">ollama_model</span>: <span class="str">"llama3:8b"</span>          <span class="cm"># or mistral:7b if RAM is tight</span>
 <span class="var">ollama_image</span>: <span class="str">"ollama/ollama:latest"</span>
@@ -777,7 +813,7 @@ docker stats ollama --no-stream</code></pre>
 <div class="content">
 
   <div class="note-box purple">
-    <strong>Key design principle:</strong> The FastAPI service is stateless. Each webhook call is a self-contained RCA cycle. No persistent database — Loki and Prometheus are the data stores. Logs RCA output through Python's standard logging so the OTel Collector ships it to Loki automatically.
+    <strong>Key design principle:</strong> The triage service (Layer 2) receives webhooks, deduplicates, and decides whether to invoke the LLM. The LLM (Layer 3) autonomously gathers data via MCP bridges — it decides what to query, not us. RCA decisions are stored in SQLite (RCA History). Email is sent directly via SMTP when the LLM confirms a valid alert. Logs RCA output through Python's standard logging so the OTel Collector ships it to Loki automatically.
   </div>
 
   <div class="section-label">Ansible Role Tasks</div>
@@ -886,7 +922,7 @@ llm = LLMClient()
 
 <span class="dec">@app.post</span>(<span class="str">"/webhook"</span>)
 <span class="kw">async def</span> <span class="fn">webhook</span>(payload: AlertPayload, background_tasks: BackgroundTasks):
-    <span class="str">"""Receive Alertmanager webhook, run RCA in background."""</span>
+    <span class="str">"""Receive Grafana Alerting webhook, run RCA in background."""</span>
     firing = [a <span class="kw">for</span> a <span class="kw">in</span> payload.alerts <span class="kw">if</span> a.get(<span class="str">"status"</span>) == <span class="str">"firing"</span>]
     <span class="kw">if not</span> firing:
         <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"skipped"</span>, <span class="str">"reason"</span>: <span class="str">"no firing alerts"</span>}
@@ -916,10 +952,11 @@ llm = LLMClient()
         log.error(<span class="fn">json.dumps</span>({<span class="str">"event"</span>: <span class="str">"rca_error"</span>, <span class="str">"error"</span>: str(exc)}))</code></pre>
   </div>
 
-  <div class="section-label">context_fetcher.py — Prometheus / Loki / Jaeger</div>
+  <div class="section-label">context_fetcher.py — Initial Alert Context (pre-LLM)</div>
 
   <div class="card">
     <h3 style="color:var(--accent-purple);">roles/llm_triage/templates/context_fetcher.py.j2</h3>
+    <p style="margin-bottom:12px;"><strong>Note:</strong> This module gathers a minimal initial context snapshot to include in the LLM prompt. The LLM then uses MCP bridges to autonomously gather additional data during its investigation — querying Prometheus, Loki, Jaeger, Drain3, and RCA History as needed. The context_fetcher provides a starting point, not the full picture.</p>
 <pre><code><span class="kw">import</span> os, time, httpx
 <span class="kw">from</span> typing <span class="kw">import</span> Dict, Any, List
 
@@ -1146,61 +1183,96 @@ Keep the response concise and actionable. Do not speculate beyond the evidence p
 </div><!-- /tab-fastapi -->
 
 
-<!-- =========================================================== ALERTMANAGER INTEGRATION -->
+<!-- =========================================================== GRAFANA ALERTING INTEGRATION -->
 <div id="tab-alertmanager" class="tab-content">
 <div class="content">
 
-  <div class="section-label">1 — Add the ai-rca Receiver</div>
+  <div class="note-box">
+    <strong>Architecture change:</strong> Alertmanager has been removed from the stack. Grafana Alerting now evaluates alert rules directly against Prometheus and Loki data sources. A single webhook contact point sends alerts to the triage service. The triage service owns email notification via SMTP — no alert reaches a developer without AI evaluation.
+  </div>
+
+  <div class="section-label">1 — Configure Grafana Webhook Contact Point</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-red);">roles/alertmanager/templates/alertmanager.yml.j2 — add receiver</h3>
-    <p style="margin-bottom:12px;">Add the <span class="ic">ai-rca</span> receiver to your existing receivers list and update the route tree to forward critical alerts to it.</p>
-<pre><code><span class="cm"># In the receivers: section — add this block</span>
-<span class="kw">receivers</span>:
-  - <span class="var">name</span>: <span class="str">"ai-rca"</span>
-    <span class="var">webhook_configs</span>:
-      - <span class="var">url</span>: <span class="str">"http://llm-triage:{{ triage_port }}/webhook"</span>
-        <span class="var">send_resolved</span>: false
-        <span class="var">http_config</span>:
-          <span class="var">timeout</span>: <span class="str">"30s"</span>   <span class="cm"># Alertmanager timeout, not LLM timeout (LLM runs async)</span>
-
-  <span class="cm"># ... your existing email receiver stays here ...</span>
-
-
-<span class="cm"># In the route: section — add a sub-route for critical alerts</span>
-<span class="kw">route</span>:
-  <span class="var">receiver</span>: <span class="str">"email-default"</span>   <span class="cm"># existing default</span>
-  <span class="var">group_by</span>: [alertname, job]
-  <span class="var">group_wait</span>: <span class="str">30s</span>
-  <span class="var">group_interval</span>: <span class="str">5m</span>
-  <span class="var">repeat_interval</span>: <span class="str">4h</span>
-  <span class="var">routes</span>:
-    - <span class="var">match</span>:
-        <span class="var">severity</span>: critical
-      <span class="var">receiver</span>: <span class="str">"ai-rca"</span>
-      <span class="var">continue</span>: true       <span class="cm"># IMPORTANT: also send to email-default</span>
-    - <span class="var">match</span>:
-        <span class="var">severity</span>: warning
-      <span class="var">receiver</span>: <span class="str">"email-default"</span></code></pre>
+    <h3 style="color:var(--accent-blue);">roles/grafana/files/provisioning/alerting/contact-points.yml</h3>
+    <p style="margin-bottom:12px;">Define a single webhook contact point that sends all alerts to the triage service. This is provisioned via Grafana's YAML-based alerting provisioning, not configured manually in the UI.</p>
+<pre><code><span class="cm"># Grafana alerting contact point provisioning</span>
+<span class="kw">apiVersion</span>: <span class="num">1</span>
+<span class="kw">contactPoints</span>:
+  - <span class="var">orgId</span>: <span class="num">1</span>
+    <span class="var">name</span>: <span class="str">"ai-rca-triage"</span>
+    <span class="var">receivers</span>:
+      - <span class="var">uid</span>: <span class="str">"ai-rca-webhook"</span>
+        <span class="var">type</span>: <span class="str">"webhook"</span>
+        <span class="var">settings</span>:
+          <span class="var">url</span>: <span class="str">"http://{{ ai_vm_private_ip }}:{{ triage_port }}/webhook/grafana"</span>
+          <span class="var">httpMethod</span>: <span class="str">"POST"</span>
+        <span class="var">disableResolveMessage</span>: true</code></pre>
     <div class="note-box" style="margin-top:12px;margin-bottom:0;">
-      <strong>continue: true</strong> — This is critical. Without it, a matched route stops evaluation and the alert only goes to <span class="ic">ai-rca</span>. With <span class="ic">continue: true</span>, the critical alert is sent to BOTH the AI triage service AND the email receiver. The operator still gets a notification even if Ollama is slow.
+      <strong>No email contact point needed.</strong> The triage service owns all email sending via Python <span class="ic">smtplib</span> with Gmail SMTP credentials. Grafana only sends webhooks — the AI pipeline decides whether an alert warrants human notification.
     </div>
   </div>
 
-  <div class="section-label">2 — Test the Webhook Manually</div>
+  <div class="section-label">2 — Provision Alert Rules</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-red);">Send a test alert without waiting for a real incident</h3>
-<pre><code><span class="cm"># Option A: amtool (from monitoring-vm)</span>
-amtool alert add \
-  alertname=HighLatencyTest \
-  severity=critical \
-  job=spring \
-  --annotation=summary="Test: p95 latency exceeded 1s"
+    <h3 style="color:var(--accent-blue);">roles/grafana/files/provisioning/alerting/alert-rules.yml</h3>
+    <p style="margin-bottom:12px;">Migrate the existing Prometheus alert rules (from <span class="ic">roles/prometheus/files/alert-rules.yml</span>) into Grafana's YAML provisioning format. Same PromQL expressions, same thresholds, now evaluated by Grafana.</p>
+<pre><code><span class="cm"># Grafana alert rule provisioning</span>
+<span class="kw">apiVersion</span>: <span class="num">1</span>
+<span class="kw">groups</span>:
+  - <span class="var">orgId</span>: <span class="num">1</span>
+    <span class="var">name</span>: <span class="str">"infrastructure-alerts"</span>
+    <span class="var">folder</span>: <span class="str">"Alerts"</span>
+    <span class="var">interval</span>: <span class="str">"60s"</span>
+    <span class="var">rules</span>:
+      - <span class="var">uid</span>: <span class="str">"high-latency"</span>
+        <span class="var">title</span>: <span class="str">"High API Latency (p95 > 500ms)"</span>
+        <span class="var">condition</span>: <span class="str">"A"</span>
+        <span class="var">data</span>:
+          - <span class="var">refId</span>: <span class="str">"A"</span>
+            <span class="var">datasourceUid</span>: <span class="str">"prometheus"</span>
+            <span class="var">model</span>:
+              <span class="var">expr</span>: <span class="str">"histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m])) > 0.5"</span>
+        <span class="var">for</span>: <span class="str">"5m"</span>
+        <span class="var">labels</span>:
+          <span class="var">severity</span>: <span class="str">"critical"</span>
+        <span class="var">annotations</span>:
+          <span class="var">summary</span>: <span class="str">"API p95 latency has exceeded 500ms for 5 minutes"</span>
 
-<span class="cm"># Option B: curl directly to Alertmanager API</span>
-curl -s -XPOST http://localhost:9093/api/v1/alerts \
+      - <span class="var">uid</span>: <span class="str">"high-error-rate"</span>
+        <span class="var">title</span>: <span class="str">"High Error Rate (5xx > 5%)"</span>
+        <span class="var">condition</span>: <span class="str">"A"</span>
+        <span class="var">data</span>:
+          - <span class="var">refId</span>: <span class="str">"A"</span>
+            <span class="var">datasourceUid</span>: <span class="str">"prometheus"</span>
+            <span class="var">model</span>:
+              <span class="var">expr</span>: <span class="str">"sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count[5m])) > 0.05"</span>
+        <span class="var">for</span>: <span class="str">"3m"</span>
+        <span class="var">labels</span>:
+          <span class="var">severity</span>: <span class="str">"critical"</span>
+
+      - <span class="var">uid</span>: <span class="str">"service-down"</span>
+        <span class="var">title</span>: <span class="str">"Service Down"</span>
+        <span class="var">condition</span>: <span class="str">"A"</span>
+        <span class="var">data</span>:
+          - <span class="var">refId</span>: <span class="str">"A"</span>
+            <span class="var">datasourceUid</span>: <span class="str">"prometheus"</span>
+            <span class="var">model</span>:
+              <span class="var">expr</span>: <span class="str">"up == 0"</span>
+        <span class="var">for</span>: <span class="str">"2m"</span>
+        <span class="var">labels</span>:
+          <span class="var">severity</span>: <span class="str">"critical"</span></code></pre>
+  </div>
+
+  <div class="section-label">3 — Test the Webhook Manually</div>
+
+  <div class="card">
+    <h3 style="color:var(--accent-blue);">Send a test alert without waiting for a real incident</h3>
+<pre><code><span class="cm"># Option A: Use the Grafana API to fire a test notification</span>
+curl -s -XPOST http://MONITORING_IP:3000/api/alertmanager/grafana/api/v2/alerts \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer GRAFANA_API_KEY" \
   -d '[{
     "labels": {
       "alertname": "HighLatencyTest",
@@ -1208,20 +1280,24 @@ curl -s -XPOST http://localhost:9093/api/v1/alerts \
       "job": "spring"
     },
     "annotations": {
-      "summary": "Test alert: p95 latency exceeded 1s",
-      "prometheus_expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m]))"
+      "summary": "Test alert: p95 latency exceeded 1s"
     },
     "startsAt": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
   }]'
+
+<span class="cm"># Option B: Curl directly to the triage service (bypass Grafana)</span>
+curl -s -XPOST http://AI_VM_IP:8090/webhook/grafana \
+  -H "Content-Type: application/json" \
+  -d '{"receiver":"ai-rca-triage","status":"firing","alerts":[{"status":"firing","labels":{"alertname":"HighLatencyTest","severity":"critical","job":"spring"},"annotations":{"summary":"Test: p95 latency exceeded 1s"}}]}'
 
 <span class="cm"># Verify the webhook was received by FastAPI</span>
 docker logs llm-triage --tail=30 -f</code></pre>
   </div>
 
-  <div class="section-label">3 — Sample RCA Output</div>
+  <div class="section-label">4 — Sample RCA Output</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-red);">Expected JSON response from FastAPI /webhook</h3>
+    <h3 style="color:var(--accent-blue);">Expected JSON response from FastAPI /webhook/grafana</h3>
 <pre><code>{
   <span class="str">"alert"</span>: <span class="str">"HighLatencyTest"</span>,
   <span class="str">"service"</span>: <span class="str">"spring"</span>,
@@ -1248,10 +1324,11 @@ docker logs llm-triage --tail=30 -f</code></pre>
     </div>
   </div>
 
-  <div class="section-label">4 — Update monitoring.yml Playbook</div>
+  <div class="section-label">5 — Update monitoring.yml Playbook</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-red);">playbooks/monitoring.yml — add the two new roles</h3>
+    <h3 style="color:var(--accent-blue);">playbooks/monitoring.yml — remove alertmanager, keep existing roles</h3>
+    <p style="margin-bottom:12px;">The <span class="ic">alertmanager</span> role is removed. Grafana now handles alert evaluation natively. Ollama and llm_triage run on the AI/LLM VM, deployed via <span class="ic">playbooks/ai.yml</span>.</p>
 <pre><code><span class="cm">---</span>
 <span class="kw">- name</span>: Deploy monitoring stack
   <span class="var">hosts</span>: monitoring
@@ -1262,13 +1339,28 @@ docker logs llm-triage --tail=30 -f</code></pre>
     - node_exporter
     - cadvisor
     - prometheus
-    - alertmanager
+    <span class="cm"># alertmanager — REMOVED (replaced by Grafana Alerting)</span>
     - loki
     - jaeger
     - otel-collector
-    - grafana
-    - <span class="fn">ollama</span>        <span class="cm"># NEW — must come before llm_triage</span>
-    - <span class="fn">llm_triage</span>    <span class="cm"># NEW</span></code></pre>
+    - grafana          <span class="cm"># now includes alert rule + contact point provisioning</span></code></pre>
+  </div>
+
+  <div class="section-label">6 — AI/LLM VM Playbook</div>
+
+  <div class="card">
+    <h3 style="color:var(--accent-blue);">playbooks/ai.yml — deploy AI services to the GPU VM</h3>
+<pre><code><span class="cm">---</span>
+<span class="kw">- name</span>: Deploy AI/LLM services
+  <span class="var">hosts</span>: ai
+  <span class="var">become</span>: true
+  <span class="var">roles</span>:
+    - common
+    - docker
+    - node_exporter
+    - cadvisor
+    - <span class="fn">ollama</span>        <span class="cm"># LLM inference engine (GPU-accelerated)</span>
+    - <span class="fn">llm_triage</span>    <span class="cm"># Triage service + Drain3 + MCP servers</span></code></pre>
   </div>
 
 </div>
@@ -1320,7 +1412,7 @@ docker logs llm-triage -f --tail=50
 <span class="cm"># Health check</span>
 curl -s http://localhost:8090/health</code></pre>
       <div class="note-box warn" style="margin-top:10px;margin-bottom:0;">
-        <strong>If no webhook arrives:</strong> Check Alertmanager routes with <span class="ic">amtool config routes test alertname=HighLatency severity=critical</span>. Verify the <span class="ic">ai-rca</span> receiver URL uses the Docker service name <span class="ic">llm-triage</span> not <span class="ic">localhost</span>.
+        <strong>If no webhook arrives:</strong> Check Grafana Alerting contact points at <span class="ic">Grafana &gt; Alerting &gt; Contact points</span>. Verify the webhook URL uses the AI VM private IP (<span class="ic">http://AI_VM_IP:8090/webhook/grafana</span>). Test the contact point from Grafana UI using the "Test" button.
       </div>
     </div>
   </div>
@@ -1383,7 +1475,7 @@ EOF
     <div class="step-num"><div class="step-circle" style="background:rgba(107,207,127,.15);border:1.5px solid rgba(107,207,127,.4);color:var(--accent-green);">5</div></div>
     <div class="step-body">
       <h4>Test Ollama directly before the full pipeline run</h4>
-<pre><code><span class="cm"># From monitoring-vm host</span>
+<pre><code><span class="cm"># From ai-vm host</span>
 curl -s http://localhost:11434/api/generate \
   -d '{"model":"llama3:8b","prompt":"List 3 common causes of API latency spikes. Be brief.","stream":false}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['response'])"
@@ -1408,8 +1500,8 @@ docker exec ollama ollama ps</code></pre>
       <li><div class="chk"></div><strong>Drain3 runs:</strong> At least one anomalous log template is identified (or "None detected" is an acceptable result if logs are clean)</li>
       <li><div class="chk"></div><strong>LLM responds:</strong> Ollama returns a non-empty RCA string within 5 minutes</li>
       <li><div class="chk"></div><strong>RCA logged:</strong> FastAPI logs show <span class="ic">rca_complete</span> event with <span class="ic">rca</span> field populated</li>
-      <li><div class="chk"></div><strong>Email sent:</strong> Gmail receives the Alertmanager notification (existing Sprint 1 email route still works with <span class="ic">continue: true</span>)</li>
-      <li><div class="chk"></div><strong>No dropped alerts:</strong> If Ollama is slow/down, Alertmanager still delivers email (5-min timeout)</li>
+      <li><div class="chk"></div><strong>Email sent:</strong> Gmail receives the RCA email from the triage service (sent via SMTP after LLM confirms valid alert)</li>
+      <li><div class="chk"></div><strong>Triage resilient:</strong> If Ollama is slow/down, triage service logs the failure and does not crash; alert is recorded in RCA History as inconclusive</li>
       <li><div class="chk"></div><strong>AWS reachable:</strong> Grafana dashboard at EC2 monitoring-vm IP:3000 loads for demo stakeholders</li>
     </ul>
   </div>
@@ -1419,17 +1511,20 @@ docker exec ollama ollama ps</code></pre>
   <details>
     <summary>Webhook not reaching FastAPI</summary>
     <div class="details-body">
-      <pre><code><span class="cm"># Test Alertmanager routing rules</span>
-amtool config routes test --config=/etc/alertmanager/alertmanager.yml \
-  alertname=HighLatency severity=critical
+      <pre><code><span class="cm"># Check Grafana alerting contact point configuration</span>
+curl -s http://MONITORING_IP:3000/api/v1/provisioning/contact-points \
+  -H "Authorization: Bearer GRAFANA_API_KEY" | python3 -m json.tool
 
-<span class="cm"># Check Alertmanager is resolving llm-triage hostname</span>
-docker exec alertmanager nslookup llm-triage
+<span class="cm"># Verify network connectivity from monitoring VM to AI VM</span>
+curl -s http://AI_VM_IP:8090/health
 
-<span class="cm"># Manually trigger the webhook</span>
-curl -XPOST http://localhost:8090/webhook \
+<span class="cm"># Test the contact point from Grafana UI:</span>
+<span class="cm"># Grafana > Alerting > Contact points > "ai-rca-triage" > Test</span>
+
+<span class="cm"># Manually trigger the webhook directly on the triage service</span>
+curl -XPOST http://AI_VM_IP:8090/webhook/grafana \
   -H "Content-Type: application/json" \
-  -d '{"receiver":"ai-rca","status":"firing","alerts":[{"status":"firing","labels":{"alertname":"Test","severity":"critical","job":"spring"},"annotations":{"summary":"manual test"}}]}'</code></pre>
+  -d '{"receiver":"ai-rca-triage","status":"firing","alerts":[{"status":"firing","labels":{"alertname":"Test","severity":"critical","job":"spring"},"annotations":{"summary":"manual test"}}]}'</code></pre>
     </div>
   </details>
 
@@ -1496,7 +1591,7 @@ docker exec llm-triage python3 -c "import drain3; print(drain3.__version__)"
 
   <div class="card">
     <h3 style="color:var(--accent-cyan);">Log-based RCA event tracking — no extra infrastructure needed</h3>
-    <p>The FastAPI service logs structured JSON to stdout. Docker captures it. The OTel Collector (already running on monitoring-vm) ships it to Loki via its filelog receiver. Grafana can then query Loki for <span class="ic">rca_complete</span> events and display them as a table or stat panel.</p>
+    <p>The FastAPI service logs structured JSON to stdout. Docker captures it. An OTel Collector filelog receiver on the AI/LLM VM ships it to Loki via its exporter. Grafana can then query Loki for <span class="ic">rca_complete</span> events and display them as a table or stat panel.</p>
     <div class="arch-row" style="margin-top:16px;">
       <div class="arch-box box-fastapi" style="min-width:80px;">FastAPI<small>stdout JSON</small></div>
       <div class="arch-arrow">→</div>
@@ -1513,7 +1608,7 @@ docker exec llm-triage python3 -c "import drain3; print(drain3.__version__)"
   <div class="section-label">OTel Collector Config — Add llm-triage Log Scrape</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-cyan);">Add to roles/otel-collector/templates/otel-collector.yml.j2 (monitoring host config)</h3>
+    <h3 style="color:var(--accent-cyan);">Add to roles/otel-collector/templates/otel-collector.yml.j2 (AI/LLM host config)</h3>
 <pre><code><span class="cm"># Add filelog receiver for the llm-triage container logs</span>
 <span class="kw">receivers</span>:
   <span class="var">filelog/llm-triage</span>:
