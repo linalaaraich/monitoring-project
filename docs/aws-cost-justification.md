@@ -1,7 +1,7 @@
 # AWS Cost Justification — Demo Environment
 **Project:** Intelligent Monitoring & AI Root Cause Analysis System
 **Company:** CIRES Technologies — Tanger Med
-**Date:** 2026-03-27
+**Date:** 2026-03-30
 **Prepared by:** Observability Team
 
 ---
@@ -83,7 +83,9 @@ The GPU instance is essential for a convincing demo. A 2-minute wait per RCA wou
 
 ## 4. Cost Breakdown
 
-### Region: eu-west-3 (Paris) — nearest to Morocco
+### Region: us-east-1 (N. Virginia) — lowest cost
+
+us-east-1 offers the lowest on-demand pricing for all four instance types. Although eu-west-3 (Paris) is geographically closer to Morocco, it costs ~14% more across the board. For a demo environment with no latency-sensitive end users, the cost savings outweigh the ~100ms additional latency.
 
 #### Scenario A: GPU runs only during work hours (Recommended)
 
