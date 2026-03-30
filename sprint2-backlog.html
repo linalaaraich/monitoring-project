@@ -184,7 +184,7 @@
   </div>
 
   <div class="note-box warn">
-    <strong>Infrastructure note:</strong> AWS is for the April 9 demo only &mdash; resources will be terminated immediately after. The monitored system is a small-scale sample app, not production workloads. Production deployment and all further development will be on CIRES private cloud infrastructure. We reuse the existing Ansible + docker-compose setup on EC2 instances. Kubernetes is permanently out of scope for this project.
+    <strong>Infrastructure note:</strong> AWS is for the April 9 demo only &mdash; resources will be terminated immediately after. The demo uses a production-like architecture: React frontend on S3 + CloudFront, MySQL on RDS, Spring Boot on a dedicated EC2, with Terraform provisioning all infrastructure. The monitored system is a small-scale sample app, not production workloads. Production deployment and all further development will be on CIRES private cloud infrastructure.
   </div>
 
   <div class="stats-row">
@@ -197,7 +197,7 @@
       <div class="stat-label">User Stories</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-orange)">86</div>
+      <div class="stat-val" style="color:var(--accent-orange)">89</div>
       <div class="stat-label">Story Points</div>
     </div>
     <div class="stat-card">
@@ -215,7 +215,7 @@
   </div>
 
   <div class="note-box">
-    <strong>Strategy:</strong> Epic 1 (AWS setup) is lightweight &mdash; just provision EC2, run existing Ansible playbooks, and add an AI/LLM VM. Should take 2&ndash;3 days. The remaining 11 days are dedicated to Epic 2 (AI RCA + Drain3 anomaly detection), which is the core deliverable. The MVP covers all implementation layers: observability (metrics, logs, traces) &rarr; anomaly detection (Drain3) &rarr; LLM reasoning (Ollama) &rarr; notification (email). One person can handle both epics sequentially, or split across team members for faster delivery.
+    <strong>Strategy:</strong> Epic 1 (AWS setup) uses Terraform to provision a production-like infrastructure &mdash; S3 + CloudFront for the React frontend, RDS for MySQL, separate EC2s for backend/network/monitoring, and a GPU instance for AI. Ansible then deploys services onto the provisioned resources. Should take 2&ndash;3 days. The remaining 11 days are dedicated to Epic 2 (AI RCA + Drain3 anomaly detection), which is the core deliverable. The MVP covers all implementation layers: observability (metrics, logs, traces) &rarr; anomaly detection (Drain3) &rarr; LLM reasoning (Ollama) &rarr; notification (email). One person can handle both epics sequentially, or split across team members for faster delivery.
   </div>
 
   <div class="section-label">Epic Summary</div>
@@ -225,10 +225,10 @@
       <div class="epic-icon" style="background:rgba(78,168,222,.1);">&#9729;</div>
       <div>
         <h2 style="color:var(--accent-blue)">Epic 1 &mdash; AWS Demo Environment</h2>
-        <p>Provision EC2 instances for the demo, deploy existing observability stack via Ansible + docker-compose. Add GPU instance for Ollama. Demo-only &mdash; teardown after April 9.</p>
+        <p>Terraform provisions production-like AWS infrastructure: S3 + CloudFront for React frontend, RDS for MySQL, 3 EC2 instances + 1 GPU instance. Ansible deploys observability stack via docker-compose. Demo-only &mdash; teardown after April 9.</p>
       </div>
       <div class="epic-meta">
-        <div class="pts" style="color:var(--accent-blue)">20</div>
+        <div class="pts" style="color:var(--accent-blue)">23</div>
         <div class="pts-label">story points</div>
         <div style="font-size:11px;color:var(--muted);margin-top:4px;">&asymp; 3 person-days</div>
       </div>
@@ -249,10 +249,6 @@
 
   <div class="section-label">Out of Scope &mdash; Future Sprints</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Infrastructure as Code</div>
-      <div style="font-size:11px;color:var(--muted);">IaC tooling for private cloud provisioning. Will be evaluated when private cloud deployment begins.</div>
-    </div>
     <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;opacity:.7;">
       <div style="font-size:12px;font-weight:600;margin-bottom:4px;">Jaeger MCP + System Metadata MCP</div>
       <div style="font-size:11px;color:var(--muted);">Lower ROI for initial RCA. Prometheus + Loki context covers 80% of signal.</div>
@@ -286,16 +282,16 @@
     <div class="epic-icon" style="background:rgba(78,168,222,.1);font-size:22px;">&#9729;</div>
     <div>
       <h2 style="color:var(--accent-blue)">Epic 1 &mdash; AWS Demo Environment</h2>
-      <p>Provision EC2 instances matching the local 3-VM layout, plus a GPU instance for Ollama. Deploy using existing Ansible playbooks and docker-compose templates. Demo-only &mdash; all AWS resources terminated after April 9. No new tooling, just cloud VMs.</p>
+      <p>Terraform provisions a production-like AWS layout: S3 + CloudFront for React frontend, RDS for MySQL, 3 EC2 instances (monitoring, backend, network) + 1 GPU instance for Ollama. Ansible deploys services onto provisioned infrastructure. Demo-only &mdash; all AWS resources terminated after April 9.</p>
     </div>
     <div class="epic-meta">
-      <div class="pts" style="color:var(--accent-blue)">20 pts</div>
+      <div class="pts" style="color:var(--accent-blue)">23 pts</div>
       <div class="pts-label">&asymp; 3 person-days</div>
     </div>
   </div>
 
   <div class="note-box">
-    <strong>Approach:</strong> We already have working Ansible playbooks and docker-compose templates for 3 VMs. The AWS setup is just: provision EC2 instances for the demo, update the Ansible inventory with new IPs, run the playbooks. The only new work is adding a 4th VM (GPU) for Ollama and the AI triage service. AWS is a temporary hosting vehicle &mdash; the same playbooks will be reused on CIRES private cloud after the demo.
+    <strong>Approach:</strong> Terraform provisions the full AWS infrastructure: VPC, 3 EC2 instances, 1 GPU instance, RDS for MySQL, S3 + CloudFront for the React frontend. Terraform outputs (IPs, RDS endpoint, CloudFront URL) feed the Ansible inventory. Ansible then deploys services: Spring Boot to the backend EC2 (pointing at RDS), React build uploaded to S3, observability stack via docker-compose on monitoring EC2. This is a production-like architecture &mdash; the same patterns apply to CIRES private cloud after the demo.
   </div>
 
   <div class="section-label">AWS Account &amp; Security</div>
@@ -328,17 +324,18 @@
     <div class="story-card">
       <div class="story-id">E1-02</div>
       <div class="story-body">
-        <div class="story-as">As an operator, I can SSH into 4 EC2 instances that mirror our local VM layout so that the existing Ansible playbooks work with minimal changes.</div>
-        <div class="story-title">Provision 4 EC2 instances: monitoring, application, network, AI/LLM</div>
-        <div class="story-desc">Launch in eu-west-3 (Paris). Monitoring: t3.large (8 GB). Application: t3.medium (4 GB). Network: t3.small (2 GB). AI/LLM: g4dn.xlarge (16 GB + T4 GPU). All in same VPC/subnet. Security groups: allow SSH from team IPs, inter-VM traffic, Grafana (3000) and Kong (8000) from team IPs. EBS: gp3 volumes (50/30/20/50 GB). Create start/stop scripts for all instances (work hours only &mdash; demo env, no 24/7 needed). All resources tagged for easy teardown after demo.</div>
+        <div class="story-as">As an operator, I can run <code>terraform apply</code> to provision the full AWS demo environment so that infrastructure is repeatable and version-controlled.</div>
+        <div class="story-title">Provision production-like AWS infrastructure with Terraform</div>
+        <div class="story-desc">Terraform provisions in us-east-1 (N. Virginia): VPC with public/private subnets. 3 EC2 instances: monitoring (t3.large, 8 GB), backend (t3.small, 2 GB), network (t3.small, 2 GB). 1 GPU instance: g4dn.xlarge (16 GB + T4 GPU). RDS db.t3.micro MySQL (single-AZ, no Multi-AZ needed for demo). S3 bucket + CloudFront distribution for React frontend. Security groups: SSH from team IPs, inter-instance traffic, Grafana (3000) and Kong (8000) from team IPs. EBS: gp3 volumes (50/20/20/50 GB). Elastic IPs for stable addressing. Terraform outputs (IPs, RDS endpoint, CloudFront domain) feed Ansible inventory. All resources tagged for easy teardown after demo.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-infra">AWS</span>
+          <span class="tag tag-tf">Terraform</span>
         </div>
       </div>
       <div class="story-meta">
-        <div class="pts-badge" style="color:var(--accent-blue)">5<small>pts</small></div>
-        <div class="time-badge">1 day</div>
+        <div class="pts-badge" style="color:var(--accent-blue)">8<small>pts</small></div>
+        <div class="time-badge">1.5 days</div>
         <div class="blocker-badge">blocks E1-03</div>
       </div>
     </div>
@@ -348,7 +345,7 @@
       <div class="story-body">
         <div class="story-as">As an operator, I can run <code>ansible-playbook playbooks/site.yml</code> against the AWS instances so that the full observability stack deploys exactly as it does locally.</div>
         <div class="story-title">Update Ansible inventory + deploy existing stack to EC2</div>
-        <div class="story-desc">Update inventory/production.yml with EC2 private IPs. Update group_vars/all.yml endpoints (loki_push_endpoint, jaeger_endpoint, prometheus_host). Copy SSH key. Run playbooks/site.yml. Verify all docker-compose services start. Prometheus targets all UP. Grafana dashboards show data. Loki receives logs. Jaeger receives traces.</div>
+        <div class="story-desc">Use Terraform outputs to populate Ansible inventory with EC2 IPs and RDS endpoint. Deploy Spring Boot to backend EC2 (pointing at RDS MySQL endpoint instead of local MySQL). Upload React production build to S3 bucket. Update Kong routes: <code>/</code> &rarr; CloudFront distribution, <code>/api</code> &rarr; backend EC2. Update group_vars/all.yml endpoints (loki_push_endpoint, jaeger_endpoint, prometheus_host). Run playbooks. Verify: Prometheus targets all UP, Grafana dashboards show data, Loki receives logs, Jaeger receives traces, frontend loads via CloudFront, API responds through Kong.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-infra">Ansible</span>
@@ -734,8 +731,8 @@
       <div style="background:rgba(78,168,222,.06);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:16px;font-size:12px;font-weight:700;color:var(--accent-blue);text-transform:uppercase;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg);">AWS Setup</div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
         <div class="day-item infra"><span class="item-name">E1-01 AWS account, IAM, billing alerts, SSH keys</span><span class="item-time">Day 1 &middot; 0.5d</span></div>
-        <div class="day-item infra"><span class="item-name">E1-02 Provision 4 EC2 instances, security groups, EBS</span><span class="item-time">Day 1&ndash;2 &middot; 1d</span></div>
-        <div class="day-item infra"><span class="item-name">E1-03 Update Ansible inventory, run playbooks, deploy stack</span><span class="item-time">Day 2 &middot; 1d</span></div>
+        <div class="day-item tf"><span class="item-name">E1-02 Terraform: VPC, 3+1 EC2s, RDS, S3, CloudFront</span><span class="item-time">Day 1&ndash;2 &middot; 1.5d</span></div>
+        <div class="day-item infra"><span class="item-name">E1-03 Ansible deploy: Spring Boot &rarr; EC2, React &rarr; S3, Kong routes &rarr; CloudFront + backend</span><span class="item-time">Day 2&ndash;3 &middot; 1d</span></div>
         <div class="day-item ai"><span class="item-name">E1-04 Install NVIDIA drivers + Ollama + pull model on GPU VM</span><span class="item-time">Day 2&ndash;3 &middot; 1d</span></div>
         <div class="day-item milestone"><span class="item-name">&#9873; E1-05 Validation: all targets UP, dashboards live, Ollama responding</span><span class="item-time">Day 3 &middot; 0.5d</span></div>
       </div>
@@ -782,7 +779,7 @@
     <div class="risk-card">
       <h4 style="color:var(--accent-red)">High Risks</h4>
       <ul>
-        <li><strong>AWS account provisioning delayed by supervisor/admin.</strong> Mitigation: submit cost justification doc immediately. Start triage service development locally while waiting.</li>
+        <li><strong>AWS account provisioning delayed by supervisor/admin.</strong> Mitigation: submit cost justification doc immediately. Start Terraform module development and triage service development locally while waiting.</li>
         <li><strong>Ollama cold-start or OOM on g4dn.xlarge.</strong> Mitigation: pre-pull model during setup. Use quantized (Q4) variant of llama3.1:8b. Test memory footprint before integrating. T4 GPU has 16 GB VRAM &mdash; 8B model (Q4) fits in ~5 GB.</li>
         <li><strong>LLM produces inconsistent JSON output.</strong> Mitigation: strict output format instruction + Pydantic validator + one retry + ESCALATE default. Build and test the parser before integrating Ollama.</li>
       </ul>
@@ -790,7 +787,7 @@
     <div class="risk-card">
       <h4 style="color:var(--accent-orange)">Medium Risks</h4>
       <ul>
-        <li><strong>AWS costs exceed expectations.</strong> Billing alerts at $100/$200/$300. Stop all instances outside work hours. Small-scale demo keeps costs low (~$88&ndash;$250 total). Terminate all resources immediately after demo.</li>
+        <li><strong>AWS costs exceed expectations.</strong> Billing alerts at $100/$200/$300. Stop all instances outside work hours. Small-scale demo keeps costs low (~$82&ndash;$240 total). Terraform makes teardown trivial (<code>terraform destroy</code>). Terminate all resources immediately after demo.</li>
         <li><strong>LLM RCA quality is poor with 8B model.</strong> Try Mistral 7B as alternative. Iterate on prompts. For demo, pre-select alert scenarios that produce good results.</li>
         <li><strong>Network latency between VMs affects triage pipeline.</strong> All VMs in same VPC/AZ. Context gathering timeout (8s per source) handles this.</li>
         <li><strong>NVIDIA driver installation on g4dn.xlarge.</strong> Use Amazon Deep Learning AMI which has drivers pre-installed. Fallback: manual CUDA toolkit install.</li>
@@ -799,7 +796,7 @@
   </div>
 
   <div style="margin-top:28px;" class="note-box">
-    <strong>Future sprints (on CIRES private cloud):</strong> Private cloud deployment, IaC tooling, Jaeger MCP, WATCH state re-checker, deep prompt engineering, and full AI pipeline test suite. AWS is not part of any future sprint &mdash; all further work is on private cloud. Kubernetes is permanently out of scope.
+    <strong>Future sprints (on CIRES private cloud):</strong> Private cloud deployment, Jaeger MCP, WATCH state re-checker, deep prompt engineering, and full AI pipeline test suite. AWS is not part of any future sprint &mdash; all further work is on private cloud. Kubernetes is permanently out of scope.
   </div>
 
 </div>

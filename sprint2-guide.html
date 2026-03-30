@@ -272,7 +272,7 @@
   <div class="card-grid">
     <div class="mini-card" style="border-color:rgba(240,160,80,.25);">
       <h4 style="color:var(--accent-orange);">Epic 1 — AWS Demo Env</h4>
-      <p>Provision 3 EC2 instances matching the local VMs. Re-run existing Ansible playbooks. Update inventory with EC2 IPs. Demo-only — shut down after April 9. Full observability stack reachable for stakeholder presentation.</p>
+      <p>Terraform provisions production-like AWS infrastructure: 3+1 EC2 instances, RDS MySQL, S3 + CloudFront for React frontend. Region: us-east-1. Re-run existing Ansible playbooks. Update inventory with EC2 IPs. Demo-only — shut down after April 9. Full observability stack reachable for stakeholder presentation.</p>
       <div class="tags"><span class="tag tag-orange">2–3 days</span><span class="tag tag-blue">Infra</span></div>
     </div>
     <div class="mini-card" style="border-color:rgba(176,126,232,.3);">
@@ -364,7 +364,7 @@
       </div>
       <div class="tl-body">
         <h4>AWS Demo Environment</h4>
-        <p>Provision EC2 instances (t3.medium + 2× t3.small). Configure security groups. Update inventory. Re-run <span class="ic">site.yml</span>. Verify dashboards green.</p>
+        <p>Terraform: VPC, 3 EC2s (t3.large + 2× t3.small) + g4dn.xlarge GPU, RDS MySQL, S3 + CloudFront. Configure security groups. Update inventory. Re-run <span class="ic">site.yml</span>. Verify dashboards green.</p>
       </div>
     </div>
     <div class="tl-item">
@@ -426,6 +426,11 @@
   <div class="section-label">Files to Create / Modify</div>
 
   <div class="filetree">
+<span class="ft-new">terraform/                         </span><span class="ft-comment">← NEW: Terraform IaC for AWS (VPC, EC2s, RDS, S3, CloudFront)</span>
+  <span class="ft-new">├── main.tf</span>
+  <span class="ft-new">├── variables.tf</span>
+  <span class="ft-new">├── outputs.tf</span>
+  <span class="ft-new">└── terraform.tfvars</span>
 <span class="ft-dir">roles/</span>
   <span class="ft-new">├── llm_triage/          </span><span class="ft-comment">← NEW: FastAPI triage service role</span>
   <span class="ft-new">│   ├── defaults/main.yml</span>
@@ -441,14 +446,15 @@
   <span class="ft-new">    ├── defaults/main.yml</span>
   <span class="ft-new">    └── tasks/main.yml</span>
 <span class="ft-dir">playbooks/templates/</span>
-  <span class="ft-mod">└── monitoring-compose.yml.j2    </span><span class="ft-comment">← MODIFY: add llm-triage + ollama services</span>
+  <span class="ft-mod">├── monitoring-compose.yml.j2    </span><span class="ft-comment">← MODIFY: add llm-triage + ollama services</span>
+  <span class="ft-mod">└── application-compose.yml.j2   </span><span class="ft-comment">← MODIFY: remove MySQL container (now on RDS), update Spring datasource URL</span>
 <span class="ft-dir">roles/alertmanager/templates/</span>
   <span class="ft-mod">└── alertmanager.yml.j2          </span><span class="ft-comment">← MODIFY: add ai-rca webhook receiver</span>
 <span class="ft-dir">playbooks/</span>
   <span class="ft-mod">└── monitoring.yml               </span><span class="ft-comment">← MODIFY: add llm_triage + ollama roles</span>
 <span class="ft-dir">inventory/group_vars/</span>
   <span class="ft-mod">├── monitoring.yml               </span><span class="ft-comment">← MODIFY: add ollama_model, triage vars</span>
-  <span class="ft-new">└── aws.yml                      </span><span class="ft-comment">← NEW: EC2 public IPs override</span>
+  <span class="ft-new">└── aws.yml                      </span><span class="ft-comment">← NEW: EC2 public IPs + RDS endpoint override</span>
   </div>
 
 </div>
@@ -468,18 +474,23 @@
   <div class="step">
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">1</div></div>
     <div class="step-body">
-      <h4>Provision three EC2 instances (Ubuntu 22.04 LTS)</h4>
-      <p>Use AMI <span class="ic">ami-0c7217cdde317cfec</span> (us-east-1) or the equivalent Ubuntu 22.04 LTS AMI in your chosen region. Create instances in the same VPC so they can communicate on private IPs.</p>
+      <h4>Provision EC2 instances + managed services (Ubuntu 22.04 LTS)</h4>
+      <p>Use AMI <span class="ic">ami-0c7217cdde317cfec</span> (us-east-1). Terraform provisions all infrastructure in a single VPC so instances communicate on private IPs. Region: <strong>us-east-1 (N. Virginia)</strong>.</p>
       <table>
         <thead><tr><th>Role</th><th>Instance Type</th><th>Storage</th><th>Notes</th></tr></thead>
         <tbody>
-          <tr><td>monitoring-vm</td><td><span class="tag tag-orange">t3.medium</span> (2 vCPU, 4 GB)</td><td>20 GB gp3</td><td>Runs Prometheus, Loki, Jaeger, Grafana, OTel Collector, <strong>Ollama</strong>. Ollama needs 8 GB — <strong>upgrade to t3.large (8 GB) if RAM is tight.</strong></td></tr>
-          <tr><td>application-vm</td><td><span class="tag tag-blue">t3.small</span> (2 vCPU, 2 GB)</td><td>16 GB gp3</td><td>Spring Boot, MySQL, Promtail, node_exporter, cAdvisor</td></tr>
-          <tr><td>network-vm</td><td><span class="tag tag-blue">t3.small</span> (2 vCPU, 2 GB)</td><td>10 GB gp3</td><td>Kong API gateway, Promtail, node_exporter, cAdvisor</td></tr>
+          <tr><td colspan="4" style="color:var(--accent-blue);font-weight:600;background:rgba(78,168,222,.06);">EC2 Instances</td></tr>
+          <tr><td>monitoring-vm</td><td><span class="tag tag-orange">t3.large</span> (2 vCPU, 8 GB)</td><td>50 GB gp3</td><td>Prometheus, Loki, Jaeger, Grafana, OTel Collector</td></tr>
+          <tr><td>backend-vm</td><td><span class="tag tag-blue">t3.small</span> (2 vCPU, 2 GB)</td><td>20 GB gp3</td><td>Spring Boot only (MySQL moved to RDS)</td></tr>
+          <tr><td>network-vm</td><td><span class="tag tag-blue">t3.small</span> (2 vCPU, 2 GB)</td><td>20 GB gp3</td><td>Kong API Gateway, Promtail, node_exporter, cAdvisor</td></tr>
+          <tr><td>ai-vm</td><td><span class="tag tag-purple">g4dn.xlarge</span> (4 vCPU, 16 GB + T4 GPU)</td><td>50 GB gp3</td><td>Ollama + FastAPI triage service. GPU accelerates LLM inference.</td></tr>
+          <tr><td colspan="4" style="color:var(--accent-green);font-weight:600;background:rgba(107,207,127,.06);">Managed Services</td></tr>
+          <tr><td>RDS MySQL</td><td><span class="tag tag-green">db.t3.micro</span> (2 vCPU, 1 GB)</td><td>20 GB gp3</td><td>Single-AZ. Replaces self-hosted MySQL container.</td></tr>
+          <tr><td>S3 + CloudFront</td><td><span class="tag tag-cyan">Managed</span></td><td>—</td><td>React static frontend. CloudFront provides CDN + HTTPS.</td></tr>
         </tbody>
       </table>
       <div class="note-box warn" style="margin-top:12px;margin-bottom:0;">
-        <strong>RAM warning:</strong> llama3:8b requires ~8 GB RAM. A t3.medium has only 4 GB. Either use <strong>t3.large</strong> (8 GB, ~$0.0832/hr) for monitoring-vm, or run Ollama on a separate <strong>t3.large</strong> instance and update <span class="ic">OLLAMA_URL</span> accordingly.
+        <strong>GPU instance note:</strong> The <strong>g4dn.xlarge</strong> ($0.526/hr) hosts Ollama with GPU acceleration for llama3:8b inference. This keeps LLM workloads isolated from the monitoring stack. Shut down the GPU instance when not actively demoing to save costs.
       </div>
     </div>
   </div>
@@ -490,22 +501,24 @@
   <div class="step">
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">2</div></div>
     <div class="step-body">
-      <h4>Create three security groups — mirror the UFW rules from Sprint 1</h4>
+      <h4>Create five security groups — mirror the UFW rules from Sprint 1</h4>
       <p>Allow inbound from the Ansible control IP (your laptop / bastion, CIDR <span class="ic">x.x.x.x/32</span>) for port 22. Internal cross-VM ports use the private subnet CIDR.</p>
       <table>
         <thead><tr><th>Security Group</th><th>Port(s)</th><th>Source</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td rowspan="5">sg-monitoring</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
+          <tr><td rowspan="4">sg-monitoring</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
           <tr><td>3000</td><td>your IP</td><td>Grafana UI</td></tr>
           <tr><td>9090, 9093</td><td>your IP</td><td>Prometheus, Alertmanager</td></tr>
-          <tr><td>8090</td><td>private subnet</td><td>FastAPI triage (Alertmanager → triage)</td></tr>
           <tr><td>3100, 4317, 4318, 16686</td><td>private subnet</td><td>Loki, OTel, Jaeger (internal)</td></tr>
-          <tr><td rowspan="3">sg-application</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
-          <tr><td>80</td><td>0.0.0.0/0</td><td>Spring Boot / React (demo app)</td></tr>
-          <tr><td>9100, 8081, 9080, 9104</td><td>private subnet</td><td>Exporters, Promtail, MySQL exporter</td></tr>
+          <tr><td rowspan="2">sg-backend</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
+          <tr><td>9100, 8081, 9080</td><td>private subnet</td><td>Exporters, Promtail. <em>No MySQL (3306) or MySQL exporter (9104) — MySQL is on RDS.</em></td></tr>
           <tr><td rowspan="3">sg-network</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
           <tr><td>8000, 8001</td><td>0.0.0.0/0</td><td>Kong proxy + admin</td></tr>
           <tr><td>9100, 8081, 9080</td><td>private subnet</td><td>Exporters, Promtail</td></tr>
+          <tr><td rowspan="3">sg-ai</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
+          <tr><td>8090</td><td>private subnet</td><td>FastAPI triage (Alertmanager → triage)</td></tr>
+          <tr><td>11434</td><td>private subnet</td><td>Ollama LLM API (internal only)</td></tr>
+          <tr><td>sg-rds</td><td>3306</td><td>private subnet</td><td>MySQL. Only accessible from backend-vm and monitoring-vm (Prometheus) within the VPC.</td></tr>
         </tbody>
       </table>
     </div>
@@ -517,8 +530,8 @@
   <div class="step">
     <div class="step-num"><div class="step-circle" style="background:rgba(240,160,80,.15);border:1.5px solid rgba(240,160,80,.4);color:var(--accent-orange);">3</div></div>
     <div class="step-body">
-      <h4>Create <span class="ic">inventory/group_vars/aws.yml</span> with EC2 public IPs</h4>
-      <p>Do not modify <span class="ic">production.yml</span> directly — use a separate AWS inventory file so you can switch between environments cleanly.</p>
+      <h4>Create <span class="ic">inventory/aws.yml</span> with EC2 public IPs + RDS endpoint</h4>
+      <p>Do not modify <span class="ic">production.yml</span> directly — use a separate AWS inventory file so you can switch between environments cleanly. Terraform outputs the IPs and RDS endpoint.</p>
 <pre><code><span class="cm"># inventory/aws.yml — EC2 demo environment</span>
 <span class="cm"># Use: ansible-playbook -i inventory/aws.yml playbooks/site.yml</span>
 <span class="kw">all</span>:
@@ -526,6 +539,9 @@
     <span class="var">ansible_user</span>: ubuntu
     <span class="var">ansible_ssh_private_key_file</span>: <span class="str">~/.ssh/aws_demo_key.pem</span>
     <span class="var">ansible_ssh_common_args</span>: <span class="str">"-o StrictHostKeyChecking=no"</span>
+    <span class="cm"># RDS MySQL endpoint (from terraform output)</span>
+    <span class="var">mysql_host</span>: <span class="str">mydb.xxxxxx.us-east-1.rds.amazonaws.com</span>
+    <span class="var">mysql_port</span>: <span class="num">3306</span>
   <span class="kw">children</span>:
     <span class="kw">monitoring</span>:
       <span class="kw">hosts</span>:
@@ -534,14 +550,22 @@
           <span class="var">private_ip</span>: <span class="str">EC2_MONITORING_PRIVATE_IP</span>  <span class="cm"># e.g. 10.0.1.10</span>
     <span class="kw">application</span>:
       <span class="kw">hosts</span>:
-        <span class="var">application-vm</span>:
-          <span class="var">ansible_host</span>: <span class="str">EC2_APP_PUBLIC_IP</span>
-          <span class="var">private_ip</span>: <span class="str">EC2_APP_PRIVATE_IP</span>
+        <span class="var">backend-vm</span>:
+          <span class="var">ansible_host</span>: <span class="str">EC2_BACKEND_PUBLIC_IP</span>
+          <span class="var">private_ip</span>: <span class="str">EC2_BACKEND_PRIVATE_IP</span>
     <span class="kw">network</span>:
       <span class="kw">hosts</span>:
         <span class="var">network-vm</span>:
           <span class="var">ansible_host</span>: <span class="str">EC2_NETWORK_PUBLIC_IP</span>
-          <span class="var">private_ip</span>: <span class="str">EC2_NETWORK_PRIVATE_IP</span></code></pre>
+          <span class="var">private_ip</span>: <span class="str">EC2_NETWORK_PRIVATE_IP</span>
+    <span class="kw">ai</span>:
+      <span class="kw">hosts</span>:
+        <span class="var">ai-vm</span>:
+          <span class="var">ansible_host</span>: <span class="str">EC2_AI_PUBLIC_IP</span>
+          <span class="var">private_ip</span>: <span class="str">EC2_AI_PRIVATE_IP</span></code></pre>
+      <div class="note-box" style="margin-top:12px;margin-bottom:12px;">
+        <strong>RDS endpoint:</strong> Replace <span class="ic">mysql_host</span> with the actual RDS endpoint from <span class="ic">terraform output rds_endpoint</span>. Spring Boot's <span class="ic">SPRING_DATASOURCE_URL</span> must point to this RDS endpoint instead of <span class="ic">localhost:3306</span>.
+      </div>
       <p>Also update cross-group endpoint variables in <span class="ic">inventory/group_vars/all.yml</span> to use the private IP of monitoring-vm:</p>
 <pre><code><span class="cm"># inventory/group_vars/all.yml — update these three lines for AWS</span>
 <span class="var">loki_push_endpoint</span>: <span class="str">"http://{{ EC2_MONITORING_PRIVATE_IP }}:3100/loki/api/v1/push"</span>
@@ -582,7 +606,9 @@ ansible-playbook -i inventory/aws.yml playbooks/network.yml</code></pre>
         <li><div class="chk"></div><strong>Prometheus</strong> — http://MONITORING_IP:9090/targets — all targets show <span style="color:var(--accent-green)">UP</span></li>
         <li><div class="chk"></div><strong>Loki</strong> — Grafana Explore, run <code class="ic">{job="spring"}</code>, see log lines</li>
         <li><div class="chk"></div><strong>Jaeger</strong> — http://MONITORING_IP:16686, select service "spring-backend", see traces</li>
-        <li><div class="chk"></div><strong>App</strong> — curl http://NETWORK_IP:8000/api/products returns HTTP 200</li>
+        <li><div class="chk"></div><strong>App API</strong> — curl http://NETWORK_IP:8000/api/products returns HTTP 200</li>
+        <li><div class="chk"></div><strong>RDS MySQL</strong> — from backend-vm: <code class="ic">mysql -h RDS_ENDPOINT -u app_user -p -e "SELECT 1"</code> connects successfully</li>
+        <li><div class="chk"></div><strong>S3/CloudFront frontend</strong> — open CloudFront distribution URL in browser, React app loads correctly</li>
         <li><div class="chk"></div><strong>Kong metrics</strong> — http://MONITORING_IP:9090/graph?g0.expr=kong_http_requests_total — non-zero</li>
         <li><div class="chk"></div><strong>Alertmanager</strong> — http://MONITORING_IP:9093 loads, no active alerts</li>
       </ul>
@@ -596,14 +622,17 @@ ansible-playbook -i inventory/aws.yml playbooks/network.yml</code></pre>
     <table>
       <thead><tr><th>Resource</th><th>Type</th><th>On-demand $/hr</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td>monitoring-vm</td><td>t3.large</td><td>$0.0832</td><td>8 GB RAM needed for llama3:8b. Use t3.medium + swap if budget-constrained.</td></tr>
-        <tr><td>application-vm</td><td>t3.small</td><td>$0.0208</td><td></td></tr>
-        <tr><td>network-vm</td><td>t3.small</td><td>$0.0208</td><td></td></tr>
-        <tr><td>EBS volumes (total ~46 GB gp3)</td><td>gp3</td><td>$0.08/GB-month</td><td>~$3.70/month</td></tr>
+        <tr><td>monitoring-vm</td><td>t3.large</td><td>$0.0832</td><td>Prometheus, Loki, Jaeger, Grafana, OTel Collector</td></tr>
+        <tr><td>backend-vm</td><td>t3.small</td><td>$0.0208</td><td>Spring Boot only</td></tr>
+        <tr><td>network-vm</td><td>t3.small</td><td>$0.0208</td><td>Kong API Gateway</td></tr>
+        <tr><td>ai-vm</td><td>g4dn.xlarge</td><td>$0.526</td><td>Ollama + FastAPI triage. Shut down when not demoing.</td></tr>
+        <tr><td>RDS MySQL</td><td>db.t3.micro</td><td>$0.017</td><td>Single-AZ managed MySQL</td></tr>
+        <tr><td>S3 + CloudFront</td><td>Managed</td><td>—</td><td>~$1/month for React static frontend</td></tr>
+        <tr><td>EBS volumes (~140 GB gp3)</td><td>gp3</td><td>$0.08/GB-month</td><td>~$11.20/month</td></tr>
         <tr><td>Data transfer</td><td>outbound</td><td>$0.09/GB</td><td>Minimal for demo</td></tr>
       </tbody>
     </table>
-    <p style="margin-top:12px;"><strong style="color:var(--text);">Total running cost:</strong> ~$0.125/hr all-in. Leaving running 24×7 for 10 days = ~<strong style="color:var(--accent-orange);">$30</strong>. Shut down when not demoing — snapshot EBS volumes to restart in minutes. Full month (worst case) = ~$95. <strong style="color:var(--accent-green);">Terminate all resources immediately after the April 9 demo.</strong></p>
+    <p style="margin-top:12px;"><strong style="color:var(--text);">Total compute cost:</strong> ~$0.67/hr (EC2 only). With RDS included: ~<strong style="color:var(--accent-orange);">$0.69/hr</strong>. Running 10 days during work hours only (~12 hr/day) = ~<strong style="color:var(--accent-orange);">$82</strong>. Shut down GPU instance when not demoing to save ~$0.53/hr. <strong style="color:var(--accent-green);">Terminate all resources immediately after the April 9 demo.</strong></p>
   </div>
 
 </div>
