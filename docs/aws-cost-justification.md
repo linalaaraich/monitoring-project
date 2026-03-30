@@ -63,7 +63,7 @@ Terraform outputs (instance IPs, RDS endpoint, S3 bucket name, CloudFront domain
 |----|-------------|---------|-------|-----|---------|
 | Monitoring VM | t3.large | Prometheus, Grafana, Loki, Jaeger, OTel Collector, Alertmanager | 2 | 8 GB | 50 GB gp3 |
 | Backend VM | t3.small | Spring Boot API (no MySQL — database is on RDS) | 2 | 2 GB | 20 GB gp3 |
-| Network VM | t3.small | Kong API Gateway, Promtail | 2 | 2 GB | 20 GB gp3 |
+| Network VM | t3.small | Kong API Gateway | 2 | 2 GB | 20 GB gp3 |
 | **AI/LLM VM** | **g4dn.xlarge** | **Ollama (self-hosted LLM), FastAPI RCA Triage Service** | **4** | **16 GB + 16 GB VRAM** | **50 GB gp3** |
 
 ### Managed Services

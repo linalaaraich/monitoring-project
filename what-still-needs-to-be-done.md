@@ -1,14 +1,14 @@
 # What Still Needs To Be Done
 
 > Project: Observability Platform — CIRES Technologies (Tanger Med)
-> Date: 2026-03-25
-> Demo: 2026-03-26 (tomorrow — keep changes conservative)
+> Originally written: 2026-03-25
+> Updated: 2026-03-30 (Promtail migration complete, doc cleanup pass)
 
 ---
 
-## 1. Commit and Push Staged Improvements (Immediate)
+## 1. ~~Commit and Push Staged Improvements~~ (Completed)
 
-These changes are already implemented in the working directory but not committed:
+These changes were implemented and committed as part of the Promtail-to-OTel Collector migration:
 
 **Modified files:**
 - `inventory/group_vars/all.yml` — Added OTel Collector version and port config
@@ -22,13 +22,13 @@ These changes are already implemented in the working directory but not committed
 - `roles/kong/templates/kong.yml.j2` — Changed OTel endpoint from IP to Docker service name
 - `roles/otel-collector/templates/otel-collector-config.yaml.j2` — Added filelog receivers, Loki exporter, conditional routing
 
-**Deleted files (Promtail role removed):**
+**Deleted files (Promtail role fully removed):**
 - `roles/promtail/defaults/main.yml`
 - `roles/promtail/handlers/main.yml`
 - `roles/promtail/tasks/main.yml`
 - `roles/promtail/templates/promtail-config.yml.j2`
 
-**Action:** Stage all changes, commit, and push.
+**Status:** Committed and pushed.
 
 ---
 
@@ -67,8 +67,8 @@ These changes are already implemented in the working directory but not committed
 
 ## 5. Potential Issues to Resolve
 
-- **Loki OTLP endpoint compatibility:** We removed Promtail entirely and now use OTel Collector on all VMs. The OTel Collector uses its native `loki` exporter to push logs to Loki's `/loki/api/v1/push` endpoint. This is compatible with Loki's existing API — no OTLP receiver needed on Loki side. Verify this works end-to-end.
-- **Label consistency:** OTel Collector adds `service.name` as a resource attribute. Grafana dashboard queries now use `service.name` instead of `job`. Make sure all queries are consistent.
+- **Loki OTLP endpoint compatibility:** ~~Done.~~ Promtail was removed and replaced with OTel Collector on all VMs. The OTel Collector uses its native `loki` exporter to push logs to Loki's `/loki/api/v1/push` endpoint. This is compatible with Loki's existing API — no OTLP receiver needed on Loki side.
+- **Label consistency:** ~~Done.~~ OTel Collector adds `service.name` as a resource attribute. Grafana dashboard queries were updated to use `service.name` instead of `job`. All queries are now consistent.
 - **Kong OTel endpoint:** Kong's OTel plugin now sends traces to `http://otel-collector:4318/v1/traces` (Docker service name). This requires Kong and OTel Collector to be on the same Docker network (they are — same compose file on network-vm).
 - **Spring Boot OTel endpoint:** Spring Boot now sends traces to `http://otel-collector:4317` (Docker service name). Same network requirement applies (same compose file on application-vm).
 - **Filelog receivers:** OTel Collector on app-vm reads `/var/log/app/*.log`, on network-vm reads `/var/log/kong/*.log`. Verify these paths exist and have correct permissions in the Docker volume mounts.
@@ -77,21 +77,10 @@ These changes are already implemented in the working directory but not committed
 
 ## 6. Documentation Updates
 
-- **Update CLAUDE.md:** Move integration test from "Not Yet Done" to "Completed" section. Update Promtail references to OTel Collector throughout.
-- **Update HTML webpage (`index.html`):**
-  - Replace all Promtail references with OTel Collector log collection
-  - Update architecture ASCII diagram (Promtail → OTel Collector on app/network VMs)
-  - Update compose sections (application-vm and network-vm now have OTel Collector, not Promtail)
-  - Update logs pipeline diagram and explanation
-  - Update trace-log correlation section (OTel Collector filelog extracts trace_id, not Promtail)
-  - Update sidebar nav (rename Promtail section to OTel Collector Log Collection)
-  - Add integration testing section
-  - Add future enhancements section
-- **Update `architecture.html`:**
-  - Replace Promtail service cards with OTel Collector on app/network VMs
-  - Update data flows table (Promtail → OTel Collector for log shipping)
-  - Update JSON schema (replace Promtail entries with OTel Collector)
-  - Update pillar summary cards (Logs pillar: OTel Collector, not Promtail)
+- **Update CLAUDE.md:** ~~Done.~~ All Promtail references replaced with OTel Collector throughout. Role list, service lists, data flows, variable hierarchy, and project structure all updated.
+- **Update HTML webpage (`index.html`):** ~~Done.~~ All Promtail references were replaced with OTel Collector log collection, architecture diagrams updated, compose sections updated, logs pipeline and trace-log correlation sections updated, and sidebar nav renamed.
+  - Still pending: Add integration testing section, add future enhancements section
+- **Update `architecture.html`:** ~~Done.~~ Promtail service cards replaced with OTel Collector on app/network VMs, data flows table updated, JSON schema updated, and pillar summary cards updated.
 - **Add integration test documentation:** Detail how to run and interpret results
 
 ---
@@ -120,14 +109,15 @@ These changes are already implemented in the working directory but not committed
 
 ## Priority Order
 
-1. **Commit current changes** — Preserve work done (Promtail→OTel Collector migration)
+1. ~~**Commit current changes**~~ — Done. Promtail-to-OTel Collector migration committed.
 2. **Test integration playbook** — Validate entire stack works end-to-end
-3. **Verify OTel Collector logs pipeline** — Fix any Loki compatibility issues
-4. **Update HTML documentation** — Reflect current architecture accurately
-5. **Address future enhancements** — Start with credential hardening post-demo
+3. **Verify OTel Collector logs pipeline** — Confirm Loki receives logs from OTel Collector on all VMs
+4. ~~**Update HTML documentation**~~ — Done. `index.html` and `architecture.html` updated to reflect OTel Collector architecture.
+5. ~~**Update CLAUDE.md**~~ — Done. All Promtail references removed, OTel Collector reflected throughout.
+6. **Address future enhancements** — Start with credential hardening post-demo
 
 ---
 
 ## Summary
 
-The project has a solid foundation with 16 Ansible roles (promtail deleted, replaced by distributed OTel Collector), three docker-compose templates, and a full observability stack covering metrics, logs, and traces. The major recent change is the migration from Promtail to OTel Collector for log collection, which consolidates the telemetry pipeline into a single agent (OTel Collector handles both traces and logs). The integration test playbook validates the entire stack works end-to-end. These remaining items will finalize documentation, verify the new pipeline, and prepare for the demo.
+The project has a solid foundation with 16 Ansible roles (the former Promtail role was deleted and replaced by distributed OTel Collector instances), three docker-compose templates, and a full observability stack covering metrics, logs, and traces. The Promtail-to-OTel Collector migration for log collection is now complete, consolidating the telemetry pipeline into a single agent per VM (OTel Collector handles both traces and logs). The `index.html` and `architecture.html` documentation have been updated to reflect this change. The integration test playbook validates the entire stack works end-to-end. Remaining items focus on finalizing CLAUDE.md documentation and preparing for the demo.

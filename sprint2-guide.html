@@ -482,7 +482,7 @@
           <tr><td colspan="4" style="color:var(--accent-blue);font-weight:600;background:rgba(78,168,222,.06);">EC2 Instances</td></tr>
           <tr><td>monitoring-vm</td><td><span class="tag tag-orange">t3.large</span> (2 vCPU, 8 GB)</td><td>50 GB gp3</td><td>Prometheus, Loki, Jaeger, Grafana, OTel Collector</td></tr>
           <tr><td>backend-vm</td><td><span class="tag tag-blue">t3.small</span> (2 vCPU, 2 GB)</td><td>20 GB gp3</td><td>Spring Boot only (MySQL moved to RDS)</td></tr>
-          <tr><td>network-vm</td><td><span class="tag tag-blue">t3.small</span> (2 vCPU, 2 GB)</td><td>20 GB gp3</td><td>Kong API Gateway, Promtail, node_exporter, cAdvisor</td></tr>
+          <tr><td>network-vm</td><td><span class="tag tag-blue">t3.small</span> (2 vCPU, 2 GB)</td><td>20 GB gp3</td><td>Kong API Gateway, node_exporter, cAdvisor</td></tr>
           <tr><td>ai-vm</td><td><span class="tag tag-purple">g4dn.xlarge</span> (4 vCPU, 16 GB + T4 GPU)</td><td>50 GB gp3</td><td>Ollama + FastAPI triage service. GPU accelerates LLM inference.</td></tr>
           <tr><td colspan="4" style="color:var(--accent-green);font-weight:600;background:rgba(107,207,127,.06);">Managed Services</td></tr>
           <tr><td>RDS MySQL</td><td><span class="tag tag-green">db.t3.micro</span> (2 vCPU, 1 GB)</td><td>20 GB gp3</td><td>Single-AZ. Replaces self-hosted MySQL container.</td></tr>
@@ -511,10 +511,10 @@
           <tr><td>9090, 9093</td><td>your IP</td><td>Prometheus, Alertmanager</td></tr>
           <tr><td>3100, 4317, 4318, 16686</td><td>private subnet</td><td>Loki, OTel, Jaeger (internal)</td></tr>
           <tr><td rowspan="2">sg-backend</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
-          <tr><td>9100, 8081, 9080</td><td>private subnet</td><td>Exporters, Promtail. <em>No MySQL (3306) or MySQL exporter (9104) — MySQL is on RDS.</em></td></tr>
+          <tr><td>9100, 8081</td><td>private subnet</td><td>Exporters. <em>No MySQL (3306) or MySQL exporter (9104) — MySQL is on RDS.</em></td></tr>
           <tr><td rowspan="3">sg-network</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
           <tr><td>8000, 8001</td><td>0.0.0.0/0</td><td>Kong proxy + admin</td></tr>
-          <tr><td>9100, 8081, 9080</td><td>private subnet</td><td>Exporters, Promtail</td></tr>
+          <tr><td>9100, 8081</td><td>private subnet</td><td>Exporters</td></tr>
           <tr><td rowspan="3">sg-ai</td><td>22</td><td>your IP</td><td>SSH / Ansible</td></tr>
           <tr><td>8090</td><td>private subnet</td><td>FastAPI triage (Alertmanager → triage)</td></tr>
           <tr><td>11434</td><td>private subnet</td><td>Ollama LLM API (internal only)</td></tr>
@@ -777,7 +777,7 @@ docker stats ollama --no-stream</code></pre>
 <div class="content">
 
   <div class="note-box purple">
-    <strong>Key design principle:</strong> The FastAPI service is stateless. Each webhook call is a self-contained RCA cycle. No persistent database — Loki and Prometheus are the data stores. Logs RCA output through Python's standard logging so Promtail picks it up automatically.
+    <strong>Key design principle:</strong> The FastAPI service is stateless. Each webhook call is a self-contained RCA cycle. No persistent database — Loki and Prometheus are the data stores. Logs RCA output through Python's standard logging so the OTel Collector ships it to Loki automatically.
   </div>
 
   <div class="section-label">Ansible Role Tasks</div>
@@ -857,7 +857,7 @@ pydantic==2.7.1</code></pre>
 <span class="kw">from</span> drain_analyzer <span class="kw">import</span> DrainAnalyzer
 <span class="kw">from</span> llm_client <span class="kw">import</span> LLMClient
 
-<span class="cm"># Structured logging — Promtail will pick this up</span>
+<span class="cm"># Structured logging — OTel Collector ships this to Loki</span>
 logging.basicConfig(
     level=logging.INFO,
     format=<span class="str">'{"time":"%(asctime)s","level":"%(levelname)s","service":"llm-triage","msg":%(message)s}'</span>
@@ -1267,7 +1267,6 @@ docker logs llm-triage --tail=30 -f</code></pre>
     - jaeger
     - otel-collector
     - grafana
-    - promtail
     - <span class="fn">ollama</span>        <span class="cm"># NEW — must come before llm_triage</span>
     - <span class="fn">llm_triage</span>    <span class="cm"># NEW</span></code></pre>
   </div>
@@ -1456,7 +1455,7 @@ docker logs ollama --tail=50</code></pre>
   <details>
     <summary>Loki returns no log lines</summary>
     <div class="details-body">
-      <pre><code><span class="cm"># Check Promtail is shipping logs from application-vm</span>
+      <pre><code><span class="cm"># Check OTel Collector is shipping logs from application-vm</span>
 curl http://MONITORING_IP:3100/loki/api/v1/labels
 
 <span class="cm"># Query directly — try a broad selector</span>
@@ -1490,20 +1489,20 @@ docker exec llm-triage python3 -c "import drain3; print(drain3.__version__)"
 <div class="content">
 
   <div class="note-box">
-    <strong>Optional enhancement (post-MVP):</strong> These steps add visibility into the AI RCA pipeline itself. Implement after the core pipeline is working. RCA outputs are already logged by FastAPI — Promtail picks them up automatically because the container logs to stdout.
+    <strong>Optional enhancement (post-MVP):</strong> These steps add visibility into the AI RCA pipeline itself. Implement after the core pipeline is working. RCA outputs are already logged by FastAPI — the OTel Collector picks them up automatically because the container logs to stdout.
   </div>
 
   <div class="section-label">How It Works</div>
 
   <div class="card">
     <h3 style="color:var(--accent-cyan);">Log-based RCA event tracking — no extra infrastructure needed</h3>
-    <p>The FastAPI service logs structured JSON to stdout. Docker captures it. Promtail (already running on monitoring-vm) ships it to Loki. Grafana can then query Loki for <span class="ic">rca_complete</span> events and display them as a table or stat panel.</p>
+    <p>The FastAPI service logs structured JSON to stdout. Docker captures it. The OTel Collector (already running on monitoring-vm) ships it to Loki via its filelog receiver. Grafana can then query Loki for <span class="ic">rca_complete</span> events and display them as a table or stat panel.</p>
     <div class="arch-row" style="margin-top:16px;">
       <div class="arch-box box-fastapi" style="min-width:80px;">FastAPI<small>stdout JSON</small></div>
       <div class="arch-arrow">→</div>
       <div class="arch-box box-loki" style="min-width:80px;">Docker<small>log driver</small></div>
       <div class="arch-arrow">→</div>
-      <div class="arch-box box-loki" style="min-width:80px;">Promtail<small>monitoring-vm</small></div>
+      <div class="arch-box box-loki" style="min-width:80px;">OTel Collector<small>filelog receiver</small></div>
       <div class="arch-arrow">→</div>
       <div class="arch-box box-loki" style="min-width:80px;">Loki<small>:3100</small></div>
       <div class="arch-arrow">→</div>
@@ -1511,32 +1510,34 @@ docker exec llm-triage python3 -c "import drain3; print(drain3.__version__)"
     </div>
   </div>
 
-  <div class="section-label">Promtail Config — Add llm-triage Container Scrape</div>
+  <div class="section-label">OTel Collector Config — Add llm-triage Log Scrape</div>
 
   <div class="card">
-    <h3 style="color:var(--accent-cyan);">Add to roles/promtail/templates/promtail.yml.j2 (monitoring host config)</h3>
-<pre><code><span class="cm"># Add to the scrape_configs section in the monitoring-vm Promtail config</span>
-<span class="kw">- job_name</span>: llm-triage-logs
-  <span class="var">docker_sd_configs</span>:
-    - <span class="var">host</span>: unix:///var/run/docker.sock
-      <span class="var">filters</span>:
-        - <span class="var">name</span>: name
-          <span class="var">values</span>: [llm-triage]
-  <span class="var">relabel_configs</span>:
-    - <span class="var">source_labels</span>: [__meta_docker_container_name]
-      <span class="var">target_label</span>: container
-    - <span class="var">target_label</span>: job
-      <span class="var">replacement</span>: llm-triage
-  <span class="var">pipeline_stages</span>:
-    - <span class="var">json</span>:
-        <span class="var">expressions</span>:
-          <span class="var">event</span>: event
-          <span class="var">alert</span>: result.alert
-          <span class="var">service</span>: result.service
-    - <span class="var">labels</span>:
-        <span class="var">event</span>:
-        <span class="var">alert</span>:
-        <span class="var">service</span>:</code></pre>
+    <h3 style="color:var(--accent-cyan);">Add to roles/otel-collector/templates/otel-collector.yml.j2 (monitoring host config)</h3>
+<pre><code><span class="cm"># Add filelog receiver for the llm-triage container logs</span>
+<span class="kw">receivers</span>:
+  <span class="var">filelog/llm-triage</span>:
+    <span class="var">include</span>:
+      - /var/lib/docker/containers/*llm-triage*/*-json.log
+    <span class="var">operators</span>:
+      - <span class="var">type</span>: json_parser
+        <span class="var">parse_from</span>: body
+      - <span class="var">type</span>: json_parser
+        <span class="var">parse_from</span>: attributes.log
+      - <span class="var">type</span>: add
+        <span class="var">field</span>: resource["service.name"]
+        <span class="var">value</span>: llm-triage
+      - <span class="var">type</span>: add
+        <span class="var">field</span>: attributes["job"]
+        <span class="var">value</span>: llm-triage
+
+<span class="cm"># Add to the logs pipeline in the service section</span>
+<span class="kw">service</span>:
+  <span class="var">pipelines</span>:
+    <span class="var">logs</span>:
+      <span class="var">receivers</span>: [filelog/llm-triage]
+      <span class="var">processors</span>: [batch]
+      <span class="var">exporters</span>: [loki]</code></pre>
   </div>
 
   <div class="section-label">Grafana Panel — AI RCA Events Table</div>

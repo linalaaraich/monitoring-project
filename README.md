@@ -32,14 +32,14 @@ Deploy everything with `ansible-playbook playbooks/site.yml`, or target individu
 | Pillar | Collection | Storage | Visualization |
 |---|---|---|---|
 | **Metrics** | Prometheus scrapes all exporters (15s interval) | Prometheus TSDB (15d retention) | Grafana |
-| **Logs** | Promtail (App + Network VMs) → Loki | Loki (7d retention) | Grafana |
+| **Logs** | OTel Collector filelog receiver → Loki | Loki (7d retention) | Grafana |
 | **Traces** | OTel Java Agent + Kong OTel Plugin → OTel Collector → Jaeger | Jaeger (Badger) | Grafana + Jaeger UI |
 
 ### Key Data Flows
 
 - **Metrics:** Prometheus (.10) scrapes all exporters across 3 VMs (15s interval)
 - **Traces:** OTel Java Agent (.30) and Kong OTel Plugin (.15) → OTel Collector (.10) → Jaeger
-- **Logs:** Promtail (.30, .15) → Loki (.10:3100)
+- **Logs:** OTel Collector filelog receiver → Loki (.10:3100)
 - **Traffic:** User → Kong (.15:8000) → Spring Boot (.30:80)
 
 ### Service Ports
@@ -73,7 +73,6 @@ Deploy everything with `ansible-playbook playbooks/site.yml`, or target individu
 | Spring Boot + React | :80 (host) → :8080 (container) |
 | MySQL | :3306 |
 | MySQL Exporter | :9104 |
-| Promtail | :9080 |
 | node_exporter | :9100 |
 | cAdvisor | :8081 |
 

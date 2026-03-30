@@ -22,7 +22,7 @@
 - [Step 6 — Build the Loki Role](#step-6)
 - [Step 7 — Build the Jaeger Role (Distributed Tracing)](#step-7)
 - [Step 8 — Build the Grafana Role (Unified Dashboard)](#step-8)
-- [Step 9 — Build the Promtail Role (Log Shipping)](#step-9)
+- [Step 9 — Configure OTel Collector Filelog Receiver (Log Shipping)](#step-9)
 - [Step 10 — Build the Application Role (React + Spring Boot + MySQL + OTel)](#step-10)
 - [Step 11 — Build the Kong Role (API Gateway + Tracing)](#step-11)
 - [Step 12 — Run the Playbook and Verify](#step-12)
@@ -68,11 +68,11 @@ Before building anything, understand what we're building and why:
                     └─────────────────────────────────────────────┘
                            ▲ scrapes       ▲ push        ▲ OTLP
                            │ metrics       │ logs        │ traces
-                    ┌──────┴───────┐ ┌─────┴────┐ ┌─────┴──────┐
-                    │ node_exporter│ │ Promtail │ │ OTel Agent │
-                    │ cAdvisor     │ │ (each VM)│ │ Kong OTel  │
-                    │ (each VM)    │ │          │ │ plugin     │
-                    └──────────────┘ └──────────┘ └────────────┘
+                    ┌──────┴───────┐ ┌──────┴──────┐ ┌─────┴──────┐
+                    │ node_exporter│ │OTel Collect.│ │ OTel Agent │
+                    │ cAdvisor     │ │  (filelog)  │ │ Kong OTel  │
+                    │ (each VM)    │ │  (each VM)  │ │ plugin     │
+                    └──────────────┘ └─────────────┘ └────────────┘
 ```
 
 **Three pillars of observability:**
@@ -222,14 +222,14 @@ Expected output: all three hosts return `"pong"`.
   hosts: application
   roles:
     - app                                 # React + Spring Boot + MySQL + OTel agent
-    - promtail                            # Ships app logs to Loki
+    - otel-collector                      # Ships app logs to Loki (filelog receiver)
   tags: [application]
 
 - name: Deploy network gateway            # Play 4: runs only on network-vm
   hosts: network
   roles:
     - kong                                # API Gateway with OTel tracing
-    - promtail                            # Ships Kong logs to Loki
+    - otel-collector                      # Ships Kong logs to Loki (filelog receiver)
   tags: [network]
 ```
 
@@ -659,7 +659,7 @@ services:
 <a name="step-6"></a>
 ## Step 6 — Build the Loki Role
 
-**What:** Deploys Loki — the log aggregation engine. Unlike Prometheus (which pulls), Loki **receives pushes** from Promtail agents on each VM. It stores logs efficiently by indexing only labels (like `{job="spring-boot", host="application-vm"}`), not the full log text.
+**What:** Deploys Loki — the log aggregation engine. Unlike Prometheus (which pulls), Loki **receives pushes** from OTel Collector agents (filelog receiver) on each VM. It stores logs efficiently by indexing only labels (like `{job="spring-boot", host="application-vm"}`), not the full log text.
 
 **Where:** `roles/loki/`
 
@@ -668,9 +668,9 @@ services:
 ### How Loki works (conceptual):
 
 ```
-Promtail on application-vm reads /var/log/app/*.log
-  → Each line gets labels: {job="spring-boot", host="application-vm"}
-  → Pushed via HTTP POST to http://192.168.127.10:3100/loki/api/v1/push
+OTel Collector (filelog receiver) on application-vm reads /var/log/app/*.log
+  → Each line gets resource attributes: {job="spring-boot", host="application-vm"}
+  → Exported via Loki exporter to http://192.168.127.10:3100/loki/api/v1/push
   → Loki stores the log line in compressed chunks on disk
   → Loki indexes the labels (NOT the log content)
   → Grafana queries: {job="spring-boot"} |= "ERROR" → Loki returns matching logs
@@ -946,82 +946,72 @@ services:
 ---
 
 <a name="step-9"></a>
-## Step 9 — Build the Promtail Role (Log Shipping)
+## Step 9 — Configure OTel Collector Filelog Receiver (Log Shipping)
 
-**What:** Deploys Promtail — a lightweight agent that reads log files on each VM and pushes them to Loki. Runs on application-vm and network-vm (and optionally monitoring-vm).
+**What:** Configures the OTel Collector's filelog receiver to read log files on each VM and push them to Loki. The OTel Collector runs on application-vm and network-vm, serving as a unified agent for traces, metrics, AND logs.
 
-**Where:** `roles/promtail/`
+**Where:** `roles/otel-collector/`
 
-**Why Promtail?** Loki can't reach into your VMs and read log files — something needs to push logs to it. Promtail is built specifically for Loki: lightweight, supports label extraction, and handles log rotation automatically.
+**Why OTel Collector (not a separate log shipper)?** Loki can't reach into your VMs and read log files — something needs to push logs to it. Rather than running a separate log-shipping agent, we use the OTel Collector that is already deployed for traces. The filelog receiver reads local log files, and the Loki exporter pushes them to Loki. This means one agent handles all telemetry signals — fewer moving parts, fewer containers, simpler operations.
 
 ### Key design: One role, different behavior per VM
 
-The Promtail config is **different on each VM** because each VM has different logs:
+The OTel Collector filelog config is **different on each VM** because each VM has different logs:
 - application-vm: `/var/log/app/*.log` (Spring Boot logs)
 - network-vm: `/var/log/kong/*.log` (Kong access logs)
 - monitoring-vm: `/var/log/*.log` (monitoring service logs)
 
 We handle this with **Jinja2 conditionals** in the template:
 
-### templates/promtail-config.yml.j2:
+### templates/otel-collector-config.yml.j2 (filelog receiver section):
 
 ```yaml
-server:
-  http_listen_port: {{ promtail_http_port }}   # 9080 — Promtail's own status endpoint
-  grpc_listen_port: 0                          # Disable gRPC (not needed)
+receivers:
+  filelog/syslog:                                # Every VM ships syslog
+    include: [/var/log/syslog]
+    resource:
+      host: {{ inventory_hostname }}             # "application-vm", "network-vm", etc.
+      job: syslog
 
-positions:
-  filename: /tmp/positions.yaml                # Tracks where Promtail left off in each file
+{% if 'application' in group_names %}            # ONLY on application-vm:
+  filelog/app-logs:
+    include: [/var/log/app/*.log]
+    resource:
+      host: {{ inventory_hostname }}
+      job: app
 
-clients:
-  - url: {{ loki_push_endpoint }}              # http://192.168.127.10:3100/loki/api/v1/push
-
-scrape_configs:
-  - job_name: system                           # Every VM ships syslog
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: syslog
-          host: {{ inventory_hostname }}        # "application-vm", "network-vm", etc.
-          __path__: /var/log/syslog
-
-{% if 'application' in group_names %}          # ONLY on application-vm:
-  - job_name: app-logs
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: app
-          host: {{ inventory_hostname }}
-          __path__: /var/log/app/*.log
-
-  - job_name: spring-boot
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: spring-boot
-          host: {{ inventory_hostname }}
-          __path__: /var/log/app/spring-boot.log
-    pipeline_stages:
-      - regex:
-          expression: 'trace_id=(?P<trace_id>[a-f0-9]+)'   # Extract trace_id from log lines
-      - labels:
-          trace_id:                             # Add trace_id as a Loki label
+  filelog/spring-boot:
+    include: [/var/log/app/spring-boot.log]
+    resource:
+      host: {{ inventory_hostname }}
+      job: spring-boot
+    operators:
+      - type: regex_parser
+        regex: 'trace_id=(?P<trace_id>[a-f0-9]+)'   # Extract trace_id from log lines
 {% endif %}
 
-{% if 'network' in group_names %}              # ONLY on network-vm:
-  - job_name: kong-logs
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: kong
-          host: {{ inventory_hostname }}
-          __path__: /var/log/kong/*.log
+{% if 'network' in group_names %}                # ONLY on network-vm:
+  filelog/kong-logs:
+    include: [/var/log/kong/*.log]
+    resource:
+      host: {{ inventory_hostname }}
+      job: kong
 {% endif %}
+
+exporters:
+  loki:
+    endpoint: {{ loki_push_endpoint }}           # http://192.168.127.10:3100/loki/api/v1/push
+
+service:
+  pipelines:
+    logs:
+      receivers: [filelog/syslog, ...]           # All filelog receivers for this VM
+      exporters: [loki]
 ```
 
 > **Beginner Note — `group_names`:** This is a built-in Ansible variable. It contains the list of groups the current host belongs to. `application-vm` is in the `application` group, so `'application' in group_names` is `true` only on that VM. This is how one template produces different configs per host.
 
-> **Beginner Note — pipeline_stages + trace_id extraction:** The `regex` stage extracts `trace_id` from log lines like `2024-03-08 14:32:01 INFO ... trace_id=abc123def456`. The `labels` stage adds `trace_id=abc123def456` as a Loki label. This lets Grafana's "derived fields" feature link logs to traces in Jaeger. Without this, you'd have to grep logs manually.
+> **Beginner Note — operators + trace_id extraction:** The `regex_parser` operator extracts `trace_id` from log lines like `2024-03-08 14:32:01 INFO ... trace_id=abc123def456`. The extracted attribute is forwarded to Loki as a label. This lets Grafana's "derived fields" feature link logs to traces in Jaeger. Without this, you'd have to grep logs manually.
 
 ---
 
@@ -1090,7 +1080,7 @@ scrape_configs:
       OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"                     # Use gRPC (faster than HTTP)
       OTEL_TRACES_EXPORTER: "otlp"                             # Export traces via OTLP
       OTEL_METRICS_EXPORTER: "none"                            # Prometheus handles metrics
-      OTEL_LOGS_EXPORTER: "none"                               # Promtail/Loki handles logs
+      OTEL_LOGS_EXPORTER: "none"                               # OTel Collector filelog receiver ships logs to Loki
       OTEL_PROPAGATORS: "tracecontext,baggage"                 # W3C Trace Context format
 
     volumes:
@@ -1103,7 +1093,7 @@ scrape_configs:
 ```
 
 > **Beginner Note — `OTEL_METRICS_EXPORTER: "none"` and `OTEL_LOGS_EXPORTER: "none"`:**
-> The OTel agent can export metrics and logs too, but we already have dedicated tools for those (Prometheus for metrics, Promtail/Loki for logs). Sending metrics through two paths would cause duplicates. So we tell the OTel agent: "Only handle traces. Leave metrics and logs to the specialist tools."
+> The OTel agent can export metrics and logs too, but we already have dedicated tools for those (Prometheus for metrics, OTel Collector filelog receiver for logs to Loki). Sending metrics through two paths would cause duplicates. So we tell the OTel agent: "Only handle traces. Leave metrics and logs to the specialist tools."
 
 ### templates/init.sql.j2 — MySQL init script:
 
@@ -1270,12 +1260,12 @@ ansible monitoring -m shell -a "docker ps --format 'table {{.Names}}\t{{.Status}
 # Application VM:
 ansible application -m shell -a "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
 
-# Expected: spring-boot, react-frontend, app-mysql, mysql-exporter, node-exporter, cadvisor, promtail
+# Expected: spring-boot, react-frontend, app-mysql, mysql-exporter, node-exporter, cadvisor, otel-collector
 
 # Network VM:
 ansible network -m shell -a "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
 
-# Expected: kong, node-exporter, cadvisor, promtail
+# Expected: kong, node-exporter, cadvisor, otel-collector
 ```
 
 ### 13.2 — Verify service health
@@ -1389,9 +1379,9 @@ ssh -i ~/.ssh/ansible_key deploy@192.168.127.10
 
 ### Loki shows "no logs found"
 
-1. Check Promtail is running on the target VM
-2. Check Promtail can reach Loki: `curl http://192.168.127.10:3100/ready` from the target VM
-3. Check Promtail config has the correct `__path__` for the log files
+1. Check OTel Collector is running on the target VM
+2. Check OTel Collector can reach Loki: `curl http://192.168.127.10:3100/ready` from the target VM
+3. Check OTel Collector filelog receiver config has the correct `include` paths for the log files
 4. Check the log files actually exist: `ls -la /var/log/app/` or `/var/log/kong/`
 
 ### Grafana "datasource not found" error
@@ -1466,10 +1456,10 @@ monitoring-project/
 │   │   ├── templates/docker-compose.yml.j2        # Docker Compose
 │   │   └── handlers/main.yml                      # Restart handler
 │   │
-│   ├── promtail/                                  # Runs on application-vm + network-vm
+│   ├── otel-collector/                             # Runs on application-vm + network-vm
 │   │   ├── defaults/main.yml                      # Default vars
-│   │   ├── tasks/main.yml                         # Deploy Promtail
-│   │   ├── templates/promtail-config.yml.j2       # Per-host log scrape config (conditional)
+│   │   ├── tasks/main.yml                         # Deploy OTel Collector
+│   │   ├── templates/otel-collector-config.yml.j2 # Filelog receiver + Loki exporter (per-host, conditional)
 │   │   ├── templates/docker-compose.yml.j2        # Docker Compose
 │   │   └── handlers/main.yml                      # Restart handler
 │   │
@@ -1527,7 +1517,7 @@ You've built a complete observability platform:
 | Log aggregation | Loki | monitoring-vm :3100 |
 | Distributed tracing | Jaeger v2 | monitoring-vm :16686 |
 | Unified dashboard | Grafana | monitoring-vm :3000 |
-| Log shipping | Promtail | app-vm + network-vm |
+| Log shipping | OTel Collector (filelog receiver) | app-vm + network-vm |
 | Host metrics | node_exporter | all VMs :9100 |
 | Container metrics | cAdvisor | all VMs :8081 |
 | App instrumentation | OTel Java agent | app-vm (Spring Boot) |
