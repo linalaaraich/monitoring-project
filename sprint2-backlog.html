@@ -193,15 +193,15 @@
       <div class="stat-label">Epics</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-purple)">20</div>
+      <div class="stat-val" style="color:var(--accent-purple)">22</div>
       <div class="stat-label">User Stories</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-orange)">89</div>
+      <div class="stat-val" style="color:var(--accent-orange)">99</div>
       <div class="stat-label">Story Points</div>
     </div>
     <div class="stat-card">
-      <div class="stat-val" style="color:var(--accent-green)">~15</div>
+      <div class="stat-val" style="color:var(--accent-green)">~17</div>
       <div class="stat-label">Person-days</div>
     </div>
     <div class="stat-card">
@@ -240,9 +240,9 @@
         <p>Grafana Alerting webhook, Drain3 anomaly detection, FastAPI Triage Service (sole notification gateway), Ollama with MCP bridges (Prometheus, Loki, Jaeger, Drain3, RCA History). Three-layer pipeline: detection &rarr; smart triage &rarr; LLM reasoning via MCP &rarr; email notification.</p>
       </div>
       <div class="epic-meta">
-        <div class="pts" style="color:var(--accent-purple)">66</div>
+        <div class="pts" style="color:var(--accent-purple)">76</div>
         <div class="pts-label">story points</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">&asymp; 12 person-days</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">&asymp; 14 person-days</div>
       </div>
     </div>
   </div>
@@ -415,8 +415,8 @@
       <p>Three-layer AI pipeline: (1) Grafana Alerting + Drain3 detect anomalies &rarr; (2) FastAPI triage service receives webhooks, deduplicates, correlates, decides whether to investigate &rarr; (3) Ollama autonomously gathers context via MCP bridges (Prometheus, Loki, Jaeger, Drain3, RCA History) and reasons over enriched context &rarr; ESCALATE/DISMISS decision. Triage service is the sole notification gateway &mdash; sends email on ESCALATE via SMTP. All decisions stored in SQLite (RCA History). 5-min timeout fallback. All self-hosted, no external APIs.</p>
     </div>
     <div class="epic-meta">
-      <div class="pts" style="color:var(--accent-purple)">66 pts</div>
-      <div class="pts-label">&asymp; 12 person-days</div>
+      <div class="pts" style="color:var(--accent-purple)">76 pts</div>
+      <div class="pts-label">&asymp; 14 person-days</div>
     </div>
   </div>
 
@@ -478,6 +478,41 @@
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-ai">Context</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-16</div>
+      <div class="story-body">
+        <div class="story-as">As the LLM, I can query Jaeger through an MCP bridge so that I can autonomously search distributed traces, find error spans, and analyze request latency during investigation.</div>
+        <div class="story-title">Jaeger MCP server (:8093): find_traces, get_trace, get_services, get_operations</div>
+        <div class="story-desc">FastAPI MCP bridge server exposing Jaeger tools to the LLM: <code>find_traces(service, operation, start, end, limit, tags)</code> (search traces by service, time window, and optional tags like error=true or http.status_code=500), <code>get_trace(trace_id)</code> (full trace detail with all spans, durations, and status codes), <code>get_services()</code> (list all traced services), <code>get_operations(service)</code> (list operations for a service). Queries Jaeger HTTP API on the monitoring VM (:16686). Read-only. The LLM uses this to: find traces within the alert time window, identify slow or failing spans, trace a request path from Kong through Spring Boot to MySQL, and correlate trace_id with Loki logs for the same request. Configurable Jaeger URL via environment variable. Runs as a standalone Docker container on the AI/LLM VM.</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Context</span>
+          <span class="tag tag-infra">Traces</span>
+        </div>
+      </div>
+      <div class="story-meta">
+        <div class="pts-badge" style="color:var(--accent-purple)">5<small>pts</small></div>
+        <div class="time-badge">1 day</div>
+      </div>
+    </div>
+
+    <div class="story-card">
+      <div class="story-id">E2-17</div>
+      <div class="story-body">
+        <div class="story-as">As the LLM, I can correlate data across metrics, logs, and traces within the same time window so that my root cause analysis connects quantitative signals (metric spikes), qualitative evidence (error logs), and request-level context (trace spans) into a coherent diagnosis.</div>
+        <div class="story-title">Cross-pillar correlation: metrics &harr; logs &harr; traces via time window + trace_id</div>
+        <div class="story-desc">Implement correlation capabilities across MCP bridges that the LLM can leverage during investigation: <strong>(1) Time-based correlation:</strong> Given an alert at time T, the LLM queries Prometheus for metrics from T-15m to T, Loki for logs in the same window, and Jaeger for traces in the same window &mdash; all three data sources aligned to the same incident timeframe. <strong>(2) Trace-log correlation:</strong> Spring Boot logs include <code>trace_id</code> (injected by OTel Java Agent). The LLM can extract a trace_id from a Loki log line, then call Jaeger MCP's <code>get_trace(trace_id)</code> to see the full request path, identifying which span failed and where latency spiked. <strong>(3) Trace-metric correlation:</strong> The LLM can identify a failing service from trace error spans, then query Prometheus for that service's CPU/memory/error rate metrics in the same time window. <strong>(4) Log-metric correlation:</strong> When Drain3 flags anomalous log patterns, the LLM checks Prometheus to see if corresponding metric anomalies exist (e.g., error rate spike coinciding with new error log templates). The LLM prompt template instructs it to perform cross-pillar correlation as a standard investigation step: &ldquo;Always check all three pillars (metrics, logs, traces) within the alert time window before reaching a verdict.&rdquo;</div>
+        <div class="story-tags">
+          <span class="tag tag-must">Must</span>
+          <span class="tag tag-ai">Correlation</span>
         </div>
       </div>
       <div class="story-meta">
@@ -587,9 +622,9 @@
     <div class="story-card">
       <div class="story-id">E2-06</div>
       <div class="story-body">
-        <div class="story-as">As the triage service, I can concurrently query Prometheus and Loki so that context is gathered in parallel and total latency stays under 10 seconds.</div>
-        <div class="story-title">Parallel context fan-out: gather Prometheus + Loki data concurrently</div>
-        <div class="story-desc">The triage service performs initial lightweight context gathering before invoking the LLM: use asyncio.gather to call Prometheus (query_range for the firing metric, 15-min window) and Loki (search_logs for the affected service, last 50 lines) concurrently. Timeout per query: 8 seconds. On timeout: include partial context with a note ("Loki unavailable"). Log lines are passed through Drain3 for anomaly annotation (E2-14). This pre-gathered context is included in the LLM prompt alongside MCP tool definitions &mdash; the LLM then autonomously queries additional data via MCP bridges as needed during its investigation.</div>
+        <div class="story-as">As the triage service, I can concurrently query Prometheus, Loki, and Jaeger so that context across all three observability pillars is gathered in parallel and total latency stays under 10 seconds.</div>
+        <div class="story-title">Parallel context fan-out: gather Prometheus + Loki + Jaeger data concurrently</div>
+        <div class="story-desc">The triage service performs initial context gathering across all three pillars before invoking the LLM: use asyncio.gather to call Prometheus (query_range for the firing metric, 15-min window), Loki (search_logs for the affected service, last 50 lines), and Jaeger (find_traces for the affected service in the same 15-min window, limit 20) concurrently. Timeout per query: 8 seconds. On timeout: include partial context with a note ("source unavailable"). Log lines are passed through Drain3 for anomaly annotation (E2-14). Trace data includes span durations, error flags, and trace_ids for log correlation. This pre-gathered context (metrics + annotated logs + traces) is included in the LLM prompt alongside MCP tool definitions &mdash; the LLM then autonomously queries additional data via MCP bridges as needed during its investigation.</div>
         <div class="story-tags">
           <span class="tag tag-must">Must</span>
           <span class="tag tag-ai">FastAPI</span>
@@ -725,7 +760,7 @@
 
   <div class="week-block">
     <div class="week-title">Week 1 &mdash; March 27 &rarr; April 2</div>
-    <div class="week-subtitle">Days 1&ndash;3: AWS setup. Days 3&ndash;7: triage service scaffold, MCP bridge servers, Ollama integration</div>
+    <div class="week-subtitle">Days 1&ndash;3: AWS setup. Days 3&ndash;7: triage service scaffold, MCP bridge servers (Prometheus, Loki, Jaeger), Ollama integration</div>
 
     <div style="display:grid;grid-template-columns:140px 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="background:rgba(78,168,222,.06);border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:16px;font-size:12px;font-weight:700;color:var(--accent-blue);text-transform:uppercase;letter-spacing:.5px;writing-mode:vertical-rl;transform:rotate(180deg);">AWS Setup</div>
@@ -748,8 +783,9 @@
         <div class="day-item ai"><span class="item-name">E2-09 Timeout fallback (5-min passthrough) &mdash; implement and test first</span><span class="item-time">Day 4 &middot; 0.5d</span></div>
         <div class="day-item ai"><span class="item-name">E2-02 Prometheus MCP server (query_instant, query_range, get_alerts, get_targets)</span><span class="item-time">Day 4 &middot; 1d</span></div>
         <div class="day-item ai"><span class="item-name">E2-03 Loki MCP server (query_logs, get_label_values, get_log_volume)</span><span class="item-time">Day 5 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-16 Jaeger MCP server (find_traces, get_trace, get_services, get_operations)</span><span class="item-time">Day 5&ndash;6 &middot; 1d</span></div>
         <div class="day-item ai"><span class="item-name">E2-05 Alert deduplication + 5-min grouping window</span><span class="item-time">Day 6 &middot; 1d</span></div>
-        <div class="day-item ai"><span class="item-name">E2-06 Parallel context fan-out (asyncio.gather, 8s timeout per query)</span><span class="item-time">Day 7 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-06 Parallel context fan-out: Prometheus + Loki + Jaeger (asyncio.gather, 8s timeout)</span><span class="item-time">Day 7 &middot; 1d</span></div>
       </div>
     </div>
   </div>
@@ -763,7 +799,8 @@
       <div style="padding:16px;display:flex;flex-direction:column;gap:8px;">
         <div class="day-item ai"><span class="item-name">E2-13 Drain3 setup: log template mining + file persistence</span><span class="item-time">Day 8 &middot; 1d</span></div>
         <div class="day-item ai"><span class="item-name">E2-14 Drain3 + Loki integration: anomaly-annotate log lines in context</span><span class="item-time">Day 9 &middot; 1d</span></div>
-        <div class="day-item ai"><span class="item-name">E2-07 LLM prompt template + JSON parser + ESCALATE/DISMISS logic</span><span class="item-time">Day 9&ndash;10 &middot; 1.5d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-17 Cross-pillar correlation: metrics &harr; logs &harr; traces via time window + trace_id</span><span class="item-time">Day 9 &middot; 1d</span></div>
+        <div class="day-item ai"><span class="item-name">E2-07 LLM prompt template + JSON parser + ESCALATE/DISMISS logic</span><span class="item-time">Day 10&ndash;11 &middot; 1.5d</span></div>
         <div class="day-item ai"><span class="item-name">E2-08 ESCALATE email: compose + send RCA via SMTP</span><span class="item-time">Day 10&ndash;11 &middot; 1d</span></div>
         <div class="day-item ai"><span class="item-name">E2-15 Drain3 observability: /drain3/stats + Prometheus metrics</span><span class="item-time">Day 11 &middot; 0.5d</span></div>
         <div class="day-item ai"><span class="item-name">E2-11 Docker-compose for AI stack (triage + MCP servers + Drain3 + Ollama + GPU)</span><span class="item-time">Day 11&ndash;12 &middot; 1d</span></div>
