@@ -289,6 +289,44 @@ s3://cires-observability-demo/drain3/
       └── known-good-2026-04-01.bin  (tagged as verified healthy)
 ```
 
+#### Why Drain3 Exists Alongside Grafana Alerting
+
+Grafana Alerting and Drain3 solve fundamentally different detection problems. Neither is redundant — they cover complementary blind spots.
+
+**Grafana Alerting detects known failure modes.**
+You write a rule: "fire when P95 latency exceeds 1 second for 2 minutes." This catches the failures you've already anticipated. But it can only alert on conditions you've explicitly defined. If a new failure mode appears that doesn't match any existing rule, Grafana stays silent.
+
+**Drain3 detects unknown failure modes.**
+It learns what "normal" log output looks like by building a template library from historical logs. When a log line appears that doesn't match any known template, Drain3 flags it as anomalous. No rules needed — it catches what you didn't think to look for.
+
+| Scenario | Grafana Alerting | Drain3 |
+|----------|-----------------|--------|
+| P95 latency exceeds 1s | Fires (threshold rule exists) | Silent (not a log anomaly) |
+| New `NullPointerException` in Spring Boot after deploy | Silent (no rule for this specific exception) | **Flags immediately** (new template never seen before) |
+| Database connection pool slowly leaking | Fires late (only after latency/error thresholds breach) | **Flags early** ("Connection pool exhausted" is a new log pattern appearing before metrics react) |
+| Known benign warning log repeating | Silent (no metric impact) | Silent (known template, high match count) |
+| Sudden spike of `WARN: SSL handshake timeout` messages | Silent (no alert rule for this message) | **Flags** (new template or rate spike of a rare template) |
+| Service crashes and stops logging entirely | Fires (`up == 0` rule) | Silent (no logs to analyze) |
+| OTel Collector dropping spans | Fires (span drop rate rule) | Silent (metric-based issue) |
+
+**Key insight:** Grafana Alerting is **reactive** — it fires after a predefined threshold is crossed, meaning the problem is already measurable. Drain3 is **proactive** — it detects the _cause_ (novel log patterns) before the _symptom_ (metric threshold breach) manifests.
+
+**What Drain3 adds to the LLM investigation:**
+
+Without Drain3, the LLM receives 50 raw log lines and must figure out which ones are relevant. With Drain3, every line is pre-annotated:
+
+```
+[KNOWN]  INFO  2026-04-05T10:30:01 Heartbeat check passed
+[KNOWN]  INFO  2026-04-05T10:30:02 Request completed in 145ms
+[ANOMALY] ERROR 2026-04-05T10:30:03 Connection pool exhausted — no available connections after 30s timeout
+[ANOMALY] ERROR 2026-04-05T10:30:03 Failed to execute query: org.hibernate.exception.JDBCConnectionException
+[KNOWN]  INFO  2026-04-05T10:30:04 Heartbeat check passed
+```
+
+The LLM immediately knows to focus on lines 3-4. The anomaly summary ("2 of 5 lines anomalous, 2 new patterns detected") gives it a quantitative signal before it even reads the logs. This reduces LLM inference time and improves RCA accuracy because the LLM isn't wasting tokens on routine log noise.
+
+**In summary:** Grafana Alerting and Drain3 form a two-pronged detection layer. Grafana watches metrics with rules you define. Drain3 watches logs for patterns you didn't anticipate. Together, they ensure Layer 2 (triage service) receives signals from both known and unknown failure modes.
+
 ### 4.3 Layer 2 — Triage Service (Detail)
 
 | Property | Detail |
