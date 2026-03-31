@@ -12,7 +12,9 @@ app_port: 8080
 mysql_database: "app-db"
 mysql_user: "appuser"
 mysql_password: "123456789"
-mysql_root_password: "123456789"
+
+# RDS connection URL — Spring Boot connects to AWS RDS instead of local MySQL
+spring_datasource_url: "jdbc:mysql://{{ rds_endpoint }}:{{ rds_port }}/{{ mysql_database }}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
 
 otel_agent_version: "2.25.0"
 otel_agent_jar: "/opt/otel/opentelemetry-javaagent.jar"
@@ -21,5 +23,3 @@ otel_exporter_endpoint: "http://otel-collector:4317"
 
 app_log_path: "/var/log/app/*.log"
 
-mysql_exporter_port: 9104
-mysql_exporter_version: "0.16.0"

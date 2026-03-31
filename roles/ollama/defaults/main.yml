@@ -1,0 +1,4 @@
+---
+ollama_port: 11434
+ollama_data_dir: /var/lib/ollama
+ollama_model: "llama3.1:8b"

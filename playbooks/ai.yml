@@ -1,0 +1,72 @@
+---
+- name: Common setup for AI/LLM hosts
+  hosts: ai
+  roles:
+    - common
+    - docker
+    - nvidia_docker
+    - node_exporter
+    - cadvisor
+  tags: [common, docker, nvidia]
+
+- name: Deploy AI/LLM stack
+  hosts: ai
+  roles:
+    - ollama
+    - triage_service
+    - mcp_servers
+    - otel-collector
+  tags: [ai]
+  tasks:
+    - name: Create stack directory
+      file:
+        path: "{{ stack_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Deploy unified AI docker-compose
+      template:
+        src: "{{ playbook_dir }}/templates/ai-compose.yml.j2"
+        dest: "{{ stack_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Start AI stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ stack_dir }}"
+        state: present
+        recreate: always
+      register: ai_stack_result
+
+    - name: Wait for Ollama
+      uri:
+        url: "http://localhost:{{ ollama_port }}/api/tags"
+        status_code: 200
+      retries: 24
+      delay: 10
+      until: ollama_health.status == 200
+      register: ollama_health
+
+    - name: Pull Ollama model
+      command: "docker exec ollama ollama pull {{ ollama_model }}"
+      register: ollama_pull
+      changed_when: "'pulling' in ollama_pull.stdout"
+      retries: 3
+      delay: 10
+
+    - name: Wait for Triage Service
+      uri:
+        url: "http://localhost:{{ triage_service_port }}/health"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: triage_health.status == 200
+      register: triage_health
+
+    - name: Wait for OTel Collector
+      uri:
+        url: "http://localhost:{{ otel_collector_health_port }}/"
+        status_code: 200
+      retries: 12
+      delay: 5
+      until: otel_health.status == 200
+      register: otel_health

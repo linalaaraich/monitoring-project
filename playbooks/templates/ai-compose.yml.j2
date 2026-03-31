@@ -1,0 +1,172 @@
+services:
+  triage-service:
+    image: {{ triage_service_image }}
+    container_name: triage-service
+    restart: unless-stopped
+    ports:
+      - "{{ triage_service_port }}:8090"
+    environment:
+      CONFIG_PATH: "/etc/triage-service/config.yml"
+      OLLAMA_URL: "http://ollama:{{ ollama_port }}"
+      OLLAMA_MODEL: "{{ ollama_model }}"
+      PROMETHEUS_MCP_URL: "http://prometheus-mcp:{{ mcp_prometheus_port }}"
+      LOKI_MCP_URL: "http://loki-mcp:{{ mcp_loki_port }}"
+      JAEGER_MCP_URL: "http://jaeger-mcp:{{ mcp_jaeger_port }}"
+      DRAIN3_MCP_URL: "http://drain3-mcp:{{ mcp_drain3_port }}"
+      RCA_HISTORY_MCP_URL: "http://rca-history-mcp:{{ mcp_rca_history_port }}"
+      LOKI_API_URL: "{{ loki_api_url }}"
+      SMTP_HOST: "{{ triage_smtp_host }}"
+      SMTP_PORT: "{{ triage_smtp_port }}"
+      SMTP_USER: "{{ triage_smtp_user }}"
+      SMTP_PASSWORD: "{{ triage_smtp_password }}"
+      SMTP_FROM: "{{ triage_smtp_from }}"
+      NOTIFICATION_EMAIL: "{{ triage_notification_email }}"
+      RCA_DB_PATH: "/var/lib/triage-service/rca_history.db"
+    volumes:
+      - {{ triage_service_config_dir }}/config.yml:/etc/triage-service/config.yml:ro
+      - {{ triage_service_data_dir }}:/var/lib/triage-service
+    depends_on:
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "{{ ollama_port }}:11434"
+    volumes:
+      - {{ ollama_data_dir }}:/root/.ollama
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  prometheus-mcp:
+    image: cires/mcp-prometheus:latest
+    container_name: prometheus-mcp
+    restart: unless-stopped
+    ports:
+      - "{{ mcp_prometheus_port }}:8091"
+    environment:
+      PROMETHEUS_URL: "{{ prometheus_api_url }}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  loki-mcp:
+    image: cires/mcp-loki:latest
+    container_name: loki-mcp
+    restart: unless-stopped
+    ports:
+      - "{{ mcp_loki_port }}:8092"
+    environment:
+      LOKI_URL: "{{ loki_api_url }}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  jaeger-mcp:
+    image: cires/mcp-jaeger:latest
+    container_name: jaeger-mcp
+    restart: unless-stopped
+    ports:
+      - "{{ mcp_jaeger_port }}:8093"
+    environment:
+      JAEGER_URL: "{{ jaeger_api_url }}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  drain3-mcp:
+    image: cires/mcp-drain3:latest
+    container_name: drain3-mcp
+    restart: unless-stopped
+    ports:
+      - "{{ mcp_drain3_port }}:8094"
+    environment:
+      TRIAGE_SERVICE_URL: "http://triage-service:{{ triage_service_port }}"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8094/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  rca-history-mcp:
+    image: cires/mcp-rca-history:latest
+    container_name: rca-history-mcp
+    restart: unless-stopped
+    ports:
+      - "{{ mcp_rca_history_port }}:8095"
+    volumes:
+      - {{ triage_service_data_dir }}:/var/lib/triage-service:ro
+    environment:
+      RCA_DB_PATH: "/var/lib/triage-service/rca_history.db"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8095/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:{{ otel_collector_version }}
+    container_name: otel-collector
+    restart: unless-stopped
+    user: "0:0"
+    command: ["--config=/etc/otel/config.yaml"]
+    ports:
+      - "{{ otel_collector_grpc_port }}:4317"
+      - "{{ otel_collector_http_port }}:4318"
+      - "{{ otel_collector_metrics_port }}:8888"
+      - "{{ otel_collector_health_port }}:13133"
+    volumes:
+      - {{ otel_collector_config_dir }}/config.yaml:/etc/otel/config.yaml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    ports:
+      - "{{ node_port }}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    ports:
+      - "{{ cadvisor_port }}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg

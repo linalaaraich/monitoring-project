@@ -1,12 +1,14 @@
 ---
-# Master playbook — deploys full observability stack across all VMs
+# Master playbook — deploys full observability + AI RCA stack across all VMs
 # Usage: ansible-playbook playbooks/site.yml
 # Per-group: ansible-playbook playbooks/monitoring.yml
 #            ansible-playbook playbooks/application.yml
 #            ansible-playbook playbooks/network.yml
+#            ansible-playbook playbooks/ai.yml
 
 - import_playbook: monitoring.yml
 - import_playbook: application.yml
 - import_playbook: network.yml
+- import_playbook: ai.yml
 # Integration tests (run after deployment)
 - import_playbook: integration.yml

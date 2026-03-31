@@ -1,0 +1,15 @@
+---
+- name: Create MCP servers config directory
+  file:
+    path: "{{ mcp_servers_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy MCP servers configuration
+  template:
+    src: mcp-config.yml.j2
+    dest: "{{ mcp_servers_config_dir }}/config.yml"
+    mode: "0644"
+  notify: restart stack

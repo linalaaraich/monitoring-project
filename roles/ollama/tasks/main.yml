@@ -1,0 +1,8 @@
+---
+- name: Create Ollama data directory
+  file:
+    path: "{{ ollama_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"

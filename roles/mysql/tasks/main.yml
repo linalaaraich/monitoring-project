@@ -1,22 +1,6 @@
 ---
-- name: Create MySQL config directory
-  file:
-    path: "{{ app_config_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Deploy MySQL init script
-  template:
-    src: init.sql.j2
-    dest: "{{ app_config_dir }}/init.sql"
-    mode: "0644"
-  notify: restart stack
-
-- name: Deploy MySQL exporter config
-  template:
-    src: mysql-exporter.cnf.j2
-    dest: "{{ app_config_dir }}/.my.cnf"
-    mode: "0600"
-  notify: restart stack
+# MySQL is now managed by AWS RDS (Terraform-provisioned).
+# Connection info is configured via spring_datasource_url in group_vars/application.yml.
+- name: Ensure MySQL role is included (RDS mode)
+  debug:
+    msg: "MySQL is provided by AWS RDS at {{ rds_endpoint }}:{{ rds_port }}. No local container."

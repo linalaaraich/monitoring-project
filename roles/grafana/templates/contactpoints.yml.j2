@@ -2,6 +2,16 @@ apiVersion: 1
 
 contactPoints:
   - orgId: 1
+    name: triage-webhook
+    receivers:
+      - uid: triage-service-webhook
+        type: webhook
+        settings:
+          url: "{{ triage_service_webhook_url }}"
+          httpMethod: POST
+          maxAlerts: 0
+        disableResolveMessage: false
+  - orgId: 1
     name: gmail-smtp
     receivers:
       - uid: gmail-email
@@ -10,14 +20,3 @@ contactPoints:
           addresses: "{{ grafana_contact_email }}"
           singleEmail: false
         disableResolveMessage: false
-{% if grafana_contact_slack_webhook | default('') != '' %}
-      - uid: slack-webhook
-        type: slack
-        settings:
-          url: "{{ grafana_contact_slack_webhook }}"
-          title: |
-            {% raw %}{{ template "default.title" . }}{% endraw %}
-          text: |
-            {% raw %}{{ template "default.message" . }}{% endraw %}
-        disableResolveMessage: false
-{% endif %}

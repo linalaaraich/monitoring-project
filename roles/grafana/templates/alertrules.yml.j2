@@ -1,0 +1,665 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: tracing_alerts
+    folder: Provisioned Alerts
+    interval: 60s
+    rules:
+      - uid: high-p95-latency
+        title: HighP95Latency
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job="app-spring-actuator"}[5m])) by (le)) * 1000'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1000]
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 request latency exceeds 1s"
+          description: "The 95th percentile latency for Spring Boot requests has been above 1000ms for 2 minutes."
+
+      - uid: high-kong-p95-latency
+        title: HighKongP95Latency
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1000]
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 Kong request latency exceeds 1s"
+          description: "The 95th percentile end-to-end latency measured at Kong has been above 1000ms for 2 minutes."
+
+      - uid: otel-collector-high-span-drop-rate
+        title: OTelCollectorHighSpanDropRate
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(sum(rate(otelcol_processor_dropped_spans_total[5m])) / clamp_min(sum(rate(otelcol_receiver_accepted_spans_total[5m])), 1))'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.05]
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OTel Collector dropping >5% of spans"
+          description: "The OTel Collector is dropping more than 5% of received spans."
+
+      - uid: otel-collector-down
+        title: OTelCollectorDown
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'up{job="otel-collector"}'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 300
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OTel Collector is down"
+          description: "The OTel Collector instance has been unreachable for 1 minute."
+
+  - orgId: 1
+    name: infrastructure_alerts
+    folder: Provisioned Alerts
+    interval: 60s
+    rules:
+      - uid: high-disk-usage
+        title: HighDiskUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!=""} / node_filesystem_size_bytes{mountpoint="/",fstype!=""}) * 100'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 85%"
+          description: "Root filesystem usage has exceeded 85% for 5 minutes."
+
+      - uid: critical-disk-usage
+        title: CriticalDiskUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!=""} / node_filesystem_size_bytes{mountpoint="/",fstype!=""}) * 100'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [95]
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 95%"
+          description: "Root filesystem usage has exceeded 95%. Immediate action required."
+
+      - uid: high-cpu-usage
+        title: HighCpuUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage has been above 85% for 5 minutes."
+
+      - uid: critical-cpu-usage
+        title: CriticalCpuUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [95]
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU usage has been above 95% for 2 minutes."
+
+      - uid: high-memory-usage
+        title: HighMemoryUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage has exceeded 85% for 5 minutes."
+
+      - uid: critical-memory-usage
+        title: CriticalMemoryUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [95]
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage has exceeded 95%. OOM risk."
+
+      - uid: medium-cpu-usage
+        title: MediumCpuUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 300
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Medium CPU usage"
+          description: "CPU usage has been above 80% for 1 minute."
+
+      - uid: medium-memory-usage
+        title: MediumMemoryUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 300
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Medium memory usage"
+          description: "Memory usage is above 80% for 1 minute."
+
+      - uid: target-down
+        title: TargetDown
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'up == 0'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 300
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitored target is down"
+          description: "A Prometheus scrape target has been unreachable for 2 minutes."
+
+      - uid: disk-filling-up
+        title: DiskFillingUp
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!=""}[6h], 24*3600)'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 21600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [0]
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk predicted to fill within 24h"
+          description: "Based on the last 6 hours of data, the root filesystem is predicted to run out of space within 24 hours."
+
+  - orgId: 1
+    name: log_alerts
+    folder: Provisioned Alerts
+    interval: 60s
+    rules:
+      - uid: loki-high-disk-usage
+        title: LokiHighDiskUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"} / node_filesystem_size_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"}) * 100'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage on monitoring VM (Loki storage)"
+          description: "Root filesystem on monitoring VM is at high usage."
+
+      - uid: loki-critical-disk-usage
+        title: LokiCriticalDiskUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"} / node_filesystem_size_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"}) * 100'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [95]
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk usage on monitoring VM (Loki storage)"
+          description: "Root filesystem on monitoring VM is at critical usage. Immediate action required."
+
+      - uid: loki-ingestion-rate-low
+        title: LokiIngestionRateLow
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'rate(loki_distributor_bytes_received_total[5m])'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 900
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1024]
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Log ingestion rate low"
+          description: "Loki log ingestion rate has been below 1 KB/sec for 10 minutes. Check OTel Collector log pipelines."
+
+      - uid: loki-disk-filling-up
+        title: LokiDiskFillingUp
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!="",job="mon-node-exporter"}[6h], 24*3600)'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 21600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [0]
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki storage disk predicted to fill within 24h"
+          description: "Based on the last 6 hours of data, the monitoring VM root filesystem is predicted to run out of space within 24 hours."

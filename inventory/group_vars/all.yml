@@ -5,6 +5,17 @@ ssh_port: 22
 firewall_enabled: true
 ansible_control_ip: 192.168.127.20
 
+# VM IPs — update from Terraform outputs for AWS deployment
+monitoring_vm_ip: "192.168.127.10"
+application_vm_ip: "192.168.127.30"
+network_vm_ip: "192.168.127.15"
+ai_vm_ip: "<AI_VM_IP>"
+
+# AWS managed services — update from Terraform outputs
+rds_endpoint: "<RDS_ENDPOINT>"
+rds_port: 3306
+cloudfront_domain: "<CLOUDFRONT_DOMAIN>"
+
 common_packages:
   - curl
   - wget
@@ -20,9 +31,9 @@ docker_compose_version: "5.0.1"
 
 cadvisor_port: 8081
 node_port: 9100
-loki_push_endpoint: "http://192.168.127.10:3100/loki/api/v1/push"
-jaeger_endpoint: "http://192.168.127.10:4317"
-prometheus_host: "192.168.127.10"
+loki_push_endpoint: "http://{{ monitoring_vm_ip }}:3100/loki/api/v1/push"
+jaeger_endpoint: "http://{{ monitoring_vm_ip }}:4317"
+prometheus_host: "{{ monitoring_vm_ip }}"
 
 # Jaeger ports (needed by OTel Collector on all VMs)
 jaeger_otlp_grpc_port: 4317

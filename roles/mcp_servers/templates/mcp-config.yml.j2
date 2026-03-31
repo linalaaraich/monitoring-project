@@ -1,0 +1,18 @@
+# MCP Bridge Servers Configuration
+# Deployed by Ansible — do not edit manually on the host
+# Shared config referenced by each MCP server container via environment variables
+
+prometheus:
+  api_url: "{{ prometheus_api_url }}"
+
+loki:
+  api_url: "{{ loki_api_url }}"
+
+jaeger:
+  api_url: "{{ jaeger_api_url }}"
+
+drain3:
+  triage_service_url: "http://triage-service:{{ triage_service_port }}"
+
+rca_history:
+  db_path: "/var/lib/triage-service/rca_history.db"

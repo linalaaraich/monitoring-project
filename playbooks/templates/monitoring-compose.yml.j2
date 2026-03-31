@@ -7,7 +7,6 @@ services:
       - "{{ prometheus_port }}:9090"
     volumes:
       - {{ prometheus_config_dir }}/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - {{ prometheus_config_dir }}/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
       - {{ prometheus_data_dir }}:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -16,25 +15,6 @@ services:
       - '--web.enable-lifecycle'
     healthcheck:
       test: ["CMD", "promtool", "check", "healthy"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-
-  alertmanager:
-    image: prom/alertmanager:{{ alertmanager_version }}
-    container_name: alertmanager
-    restart: unless-stopped
-    ports:
-      - "{{ alertmanager_port }}:9093"
-    volumes:
-      - {{ alertmanager_config_dir }}/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - {{ alertmanager_data_dir }}:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--log.level=debug'
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
       interval: 15s
       timeout: 5s
       retries: 3

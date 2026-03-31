@@ -3,9 +3,10 @@ kong_admin_port: 8001
 kong_config_mode: "dbless"
 kong_config_file: /etc/kong/kong.yml
 
-app_backend_host: "192.168.127.30"
+app_backend_host: "{{ application_vm_ip }}"
 app_backend_port: 8080
 app_frontend_port: 80
+app_frontend_url: "https://{{ cloudfront_domain }}"
 kong_log_path: "/var/log/kong/*.log"
 
 kong_plugins:

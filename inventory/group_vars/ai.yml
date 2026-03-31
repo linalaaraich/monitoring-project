@@ -1,0 +1,34 @@
+# Triage Service (FastAPI + Drain3)
+triage_service_port: 8090
+triage_service_image: "cires/triage-service:latest"
+triage_service_config_dir: /etc/triage-service
+triage_service_data_dir: /var/lib/triage-service
+
+# Ollama (self-hosted LLM runtime)
+ollama_port: 11434
+ollama_model: "llama3.1:8b"
+ollama_data_dir: /var/lib/ollama
+
+# MCP Bridge Servers
+mcp_prometheus_port: 8091
+mcp_loki_port: 8092
+mcp_jaeger_port: 8093
+mcp_drain3_port: 8094
+mcp_rca_history_port: 8095
+mcp_servers_config_dir: /etc/mcp-servers
+
+# MCP server endpoints — they query the monitoring VM services
+prometheus_api_url: "http://{{ monitoring_vm_ip }}:{{ prometheus_port }}"
+loki_api_url: "http://{{ monitoring_vm_ip }}:{{ loki_port }}"
+jaeger_api_url: "http://{{ monitoring_vm_ip }}:{{ jaeger_port_ui }}"
+
+# SMTP config for triage service email notifications (RCA escalation emails)
+triage_smtp_host: "smtp.gmail.com"
+triage_smtp_port: 587
+triage_smtp_user: "laaraichlina@gmail.com"
+triage_smtp_password: "{{ lookup('env', 'GRAFANA_SMTP_PASSWORD') }}"
+triage_smtp_from: "laaraichlina@gmail.com"
+triage_notification_email: "laaraichlina@gmail.com"
+
+# NVIDIA GPU runtime for Ollama
+nvidia_runtime_enabled: true

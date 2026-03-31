@@ -50,6 +50,15 @@
     mode: "0644"
   notify: restart stack
 
+- name: Deploy Grafana provisioned alert rules
+  template:
+    src: alertrules.yml.j2
+    dest: "{{ grafana_provisioning_dir }}/alerting/alertrules.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  notify: restart stack
+
 - name: Create Grafana dashboards directory
   file:
     path: "{{ grafana_data_dir }}/dashboards"

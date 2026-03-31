@@ -1,0 +1,4 @@
+---
+triage_service_port: 8090
+triage_service_config_dir: /etc/triage-service
+triage_service_data_dir: /var/lib/triage-service

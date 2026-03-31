@@ -8,9 +8,10 @@
   gather_facts: false
   tags: [connectivity]
   vars:
-    monitoring_ip: "192.168.127.10"
-    network_ip: "192.168.127.15"
-    application_ip: "192.168.127.30"
+    monitoring_ip: "{{ monitoring_vm_ip }}"
+    network_ip: "{{ network_vm_ip }}"
+    application_ip: "{{ application_vm_ip }}"
+    ai_ip: "{{ ai_vm_ip }}"
 
   tasks:
     - name: Check SSH connectivity to all VMs
@@ -20,6 +21,7 @@
         - monitoring-vm
         - network-vm
         - application-vm
+        - ai-vm
       tags: [ping]
 
     - name: Validate monitoring services health
@@ -29,7 +31,6 @@
         timeout: 10
       loop:
         - { service: "Prometheus", port: 9090, path: "/-/ready" }
-        - { service: "Alertmanager", port: 9093, path: "/-/healthy" }
         - { service: "Loki", port: 3100, path: "/ready" }
         - { service: "Jaeger UI", port: 16686, path: "/" }
         - { service: "OTel Collector metrics", port: 8888, path: "/metrics" }
@@ -57,25 +58,31 @@
         timeout: 10
       loop:
         - { service: "Spring Boot API", port: 80, path: "/api/employee" }
-        - { service: "MySQL Exporter", port: 9104, path: "/metrics" }
         - { service: "Node Exporter", port: 9100, path: "/metrics" }
         - { service: "cAdvisor", port: 8081, path: "/metrics" }
       tags: [health, application]
 
-    - name: Verify MySQL TCP connectivity
-      ansible.builtin.wait_for:
-        host: "{{ application_ip }}"
-        port: 3306
-        timeout: 5
-      tags: [health, application]
+    - name: Validate AI services health
+      ansible.builtin.uri:
+        url: "http://{{ ai_ip }}:{{ item.port }}{{ item.path }}"
+        status_code: "{{ item.status | default(200) }}"
+        timeout: 10
+      loop:
+        - { service: "Triage Service", port: 8090, path: "/health" }
+        - { service: "Ollama", port: 11434, path: "/api/tags" }
+        - { service: "Node Exporter", port: 9100, path: "/metrics" }
+        - { service: "cAdvisor", port: 8081, path: "/metrics" }
+      loop_control:
+        label: "{{ item.service }} ({{ ai_ip }}:{{ item.port }})"
+      tags: [health, ai]
 
 - name: Generate test traffic and validate observability data flows
   hosts: localhost
   gather_facts: false
   tags: [load, verification]
   vars:
-    network_ip: "192.168.127.15"
-    monitoring_ip: "192.168.127.10"
+    network_ip: "{{ network_vm_ip }}"
+    monitoring_ip: "{{ monitoring_vm_ip }}"
   tasks:
     - name: Run load test script to generate traces
       ansible.builtin.shell:

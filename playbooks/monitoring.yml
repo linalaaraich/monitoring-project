@@ -12,7 +12,6 @@
   hosts: monitoring
   roles:
     - prometheus
-    - alertmanager
     - loki
     - jaeger
     - otel-collector
@@ -74,15 +73,6 @@
       delay: 5
       until: otel_health.status == 200
       register: otel_health
-
-    - name: Wait for Alertmanager
-      uri:
-        url: "http://localhost:{{ alertmanager_port }}/-/healthy"
-        status_code: 200
-      retries: 12
-      delay: 5
-      until: alertmanager_health.status == 200
-      register: alertmanager_health
 
     - name: Wait for Grafana
       uri:

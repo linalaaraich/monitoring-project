@@ -1,0 +1,42 @@
+# Triage Service Configuration
+# Deployed by Ansible — do not edit manually on the host
+
+ollama:
+  url: "http://ollama:{{ ollama_port }}"
+  model: "{{ ollama_model }}"
+  timeout_seconds: 300
+
+mcp_servers:
+  prometheus:
+    url: "http://prometheus-mcp:{{ mcp_prometheus_port }}"
+  loki:
+    url: "http://loki-mcp:{{ mcp_loki_port }}"
+  jaeger:
+    url: "http://jaeger-mcp:{{ mcp_jaeger_port }}"
+  drain3:
+    url: "http://drain3-mcp:{{ mcp_drain3_port }}"
+  rca_history:
+    url: "http://rca-history-mcp:{{ mcp_rca_history_port }}"
+
+smtp:
+  host: "{{ triage_smtp_host }}"
+  port: {{ triage_smtp_port }}
+  user: "{{ triage_smtp_user }}"
+  password: "{{ triage_smtp_password }}"
+  from: "{{ triage_smtp_from }}"
+  to: "{{ triage_notification_email }}"
+
+deduplication:
+  window_minutes: 5
+
+context_gathering:
+  timeout_seconds: 8
+  prometheus_range_minutes: 15
+  loki_log_limit: 50
+  jaeger_trace_limit: 20
+
+rca_history:
+  db_path: "/var/lib/triage-service/rca_history.db"
+
+loki:
+  api_url: "{{ loki_api_url }}"
