@@ -83,3 +83,10 @@ prometheus_targets:
     port: "{{ cadvisor_port }}"
 
 loki_retention_days: 7
+
+# --- Kubernetes service discovery (set to true after k3s migration) ---
+# When enabled, Prometheus adds kubernetes_sd_configs scrape jobs
+# and Grafana alert rules use pod-based selectors
+k3s_sd_enabled: false
+# k3s_host_ip: set in group_vars/all.yml or group_vars/k3s_cluster.yml
+# k3s_bearer_token: set via Ansible Vault (extracted from prometheus-scraper SA)

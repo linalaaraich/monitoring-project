@@ -1,0 +1,32 @@
+{{- $fullname := include "ai-stack.fullname" . -}}
+{{- $labels := include "ai-stack.labels" . -}}
+{{- $selectorLabels := include "ai-stack.selectorLabels" . -}}
+
+{{- $servers := dict
+  "prometheus" .Values.mcpServers.prometheus
+  "loki" .Values.mcpServers.loki
+  "jaeger" .Values.mcpServers.jaeger
+  "drain3" .Values.mcpServers.drain3
+  "rca-history" .Values.mcpServers.rcaHistory
+-}}
+
+{{- range $name, $server := $servers }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-mcp-{{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+    app.kubernetes.io/component: mcp-{{ $name }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ $server.port }}
+      targetPort: {{ $server.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- $selectorLabels | nindent 4 }}
+    app.kubernetes.io/component: mcp-{{ $name }}
+{{- end }}

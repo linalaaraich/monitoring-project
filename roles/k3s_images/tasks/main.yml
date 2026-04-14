@@ -1,0 +1,92 @@
+---
+# Build first-party Docker images and import into k3s containerd (E3-02)
+#
+# Flow:
+#   1. Sync source repos from control machine to k3s host
+#   2. Build each image with Docker on the k3s host
+#   3. Save as tarball → import into k3s containerd
+#   4. Clean up
+#
+# Why build on the remote host?
+#   k3s uses containerd, not Docker. We build with Docker (installed by the
+#   docker role), save as OCI tarball, then import into containerd via
+#   `k3s ctr images import`. This avoids needing a registry.
+
+- name: Ensure Docker is available for building
+  command: docker --version
+  changed_when: false
+
+- name: Create remote build directory
+  file:
+    path: "{{ remote_build_dir }}"
+    state: directory
+    mode: '0755'
+
+# Sync triage service source to k3s host
+- name: Sync triage service repo to k3s host
+  synchronize:
+    src: "{{ triage_service_local_repo }}/"
+    dest: "{{ remote_build_dir }}/triage-service/"
+    delete: true
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=.venv"
+      - "--exclude=__pycache__"
+
+# Sync MCP servers source to k3s host
+- name: Sync MCP servers repo to k3s host
+  synchronize:
+    src: "{{ mcp_servers_local_repo }}/"
+    dest: "{{ remote_build_dir }}/mcp-servers/"
+    delete: true
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=__pycache__"
+
+# Build each image using the Docker CLI
+# Using shell command instead of community.docker.docker_image because
+# the module's dockerfile parameter handling is more reliable with CLI
+- name: Build first-party Docker images
+  command: >
+    docker build
+    -t {{ item.name }}:{{ image_tag }}
+    -f {{ remote_build_dir }}/{{ item.remote_subdir }}/{{ item.dockerfile_rel }}
+    {{ remote_build_dir }}/{{ item.remote_subdir }}
+  loop: "{{ first_party_images }}"
+  loop_control:
+    label: "{{ item.name }}:{{ image_tag }}"
+  changed_when: true
+
+# Save each image as a tarball, then import into k3s containerd
+- name: Save and import images into k3s containerd
+  shell: |
+    set -euo pipefail
+    TARBALL="/tmp/{{ item.name | regex_replace('/', '-') }}.tar"
+    docker save "{{ item.name }}:{{ image_tag }}" -o "$TARBALL"
+    k3s ctr images import "$TARBALL"
+    rm -f "$TARBALL"
+  args:
+    executable: /bin/bash
+  loop: "{{ first_party_images }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: true
+
+# Verify all images are available
+- name: Verify images are available in k3s containerd
+  command: k3s crictl images
+  register: k3s_images_result
+  changed_when: false
+
+- name: Show imported images
+  debug:
+    var: k3s_images_result.stdout_lines
+
+- name: Verify all first-party images are present
+  assert:
+    that:
+      - "'{{ item.name }}' in k3s_images_result.stdout"
+    fail_msg: "Image {{ item.name }}:{{ image_tag }} not found in k3s containerd"
+  loop: "{{ first_party_images }}"
+  loop_control:
+    label: "{{ item.name }}"

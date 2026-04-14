@@ -1,4 +1,8 @@
 ---
+roles:
+  - name: xanmanning.k3s
+    version: "v3.4.4"
+
 collections:
   - name: community.docker
-    version: ">=3.4.0"
+    version: "3.13.0"

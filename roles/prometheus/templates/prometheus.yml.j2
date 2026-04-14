@@ -3,6 +3,7 @@ global:
   evaluation_interval: {{ prometheus_scrape_interval }}
 
 scrape_configs:
+  # --- Static targets (monitoring VM services + GPU VM) ---
 {% for target in prometheus_targets %}
   - job_name: '{{ target.job }}'
 {% if target.metrics_path is defined %}
@@ -11,3 +12,87 @@ scrape_configs:
     static_configs:
       - targets: ['{{ target.host }}:{{ target.port }}']
 {% endfor %}
+
+{% if k3s_sd_enabled | default(false) %}
+  # --- Kubernetes service discovery (k3s cluster pods) ---
+  # Scrapes pods annotated with prometheus.io/scrape: "true"
+  # Requires: prometheus-scraper ServiceAccount token from k3s cluster
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: 'https://{{ k3s_host_ip }}:6443'
+        bearer_token_file: /etc/prometheus/k3s-token
+        tls_config:
+          insecure_skip_verify: true
+    bearer_token_file: /etc/prometheus/k3s-token
+    tls_config:
+      insecure_skip_verify: true
+    relabel_configs:
+      # Only scrape pods with prometheus.io/scrape annotation
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: 'true'
+      # Use custom metrics path if annotated
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      # Use custom port if annotated
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      # Add pod name label
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+      # Add namespace label
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+      # Add container name label
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        action: replace
+        target_label: container
+      # Add app label from pod label
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        action: replace
+        target_label: app
+      # Add node name
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        action: replace
+        target_label: node
+
+  # --- Kubernetes node metrics (kubelet + cAdvisor) ---
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+        api_server: 'https://{{ k3s_host_ip }}:6443'
+        bearer_token_file: /etc/prometheus/k3s-token
+        tls_config:
+          insecure_skip_verify: true
+    bearer_token_file: /etc/prometheus/k3s-token
+    tls_config:
+      insecure_skip_verify: true
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_name]
+        action: replace
+        target_label: node
+
+  - job_name: 'kubernetes-cadvisor'
+    kubernetes_sd_configs:
+      - role: node
+        api_server: 'https://{{ k3s_host_ip }}:6443'
+        bearer_token_file: /etc/prometheus/k3s-token
+        tls_config:
+          insecure_skip_verify: true
+    bearer_token_file: /etc/prometheus/k3s-token
+    tls_config:
+      insecure_skip_verify: true
+    metrics_path: /metrics/cadvisor
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_node_name]
+        action: replace
+        target_label: node
+{% endif %}

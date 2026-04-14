@@ -1,0 +1,35 @@
+# Values for upstream kong/kong Helm chart (v2.38.0)
+# Install: helm install kong kong/kong -f charts/kong/values-k3s.yaml -n network --create-namespace
+
+image:
+  repository: kong
+  tag: "3.9"
+
+env:
+  database: "off"
+  declarative_config: /kong/config/kong.yml
+
+dblessConfig:
+  configMap: kong-config
+
+proxy:
+  enabled: true
+  type: NodePort
+  http:
+    nodePort: 30080
+  tls:
+    enabled: false
+
+admin:
+  enabled: true
+  type: ClusterIP
+  http:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi

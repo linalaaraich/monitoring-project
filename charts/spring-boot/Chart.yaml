@@ -1,0 +1,6 @@
+apiVersion: v2
+name: spring-boot
+description: Spring Boot backend for CIRES observability demo
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

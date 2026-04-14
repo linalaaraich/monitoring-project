@@ -1,0 +1,19 @@
+---
+# k3s cluster configuration
+k3s_release_version: "v1.30.6+k3s1"
+
+# Disable Traefik — Kong is our ingress
+k3s_server:
+  disable:
+    - traefik
+  write-kubeconfig-mode: "0644"
+
+# Image tag for first-party images (triage service + 5 MCP servers)
+image_tag: "latest"
+
+# Helm chart versions
+kong_chart_version: "2.38.0"
+
+# k3s host details (updated from Terraform outputs)
+k3s_host_ip: "<K3S_HOST_IP>"
+gpu_host_ip: "<GPU_HOST_IP>"

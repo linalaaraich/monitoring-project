@@ -1,0 +1,93 @@
+{{- $fullname := include "ai-stack.fullname" . -}}
+{{- $labels := include "ai-stack.labels" . -}}
+{{- $selectorLabels := include "ai-stack.selectorLabels" . -}}
+{{- $imageTag := .Values.imageTag -}}
+{{- $resources := .Values.mcpServers.resources -}}
+{{- $prometheusScrape := .Values.prometheus.scrape -}}
+
+{{- $servers := dict
+  "prometheus" .Values.mcpServers.prometheus
+  "loki" .Values.mcpServers.loki
+  "jaeger" .Values.mcpServers.jaeger
+  "drain3" .Values.mcpServers.drain3
+  "rca-history" .Values.mcpServers.rcaHistory
+-}}
+
+{{- $envMap := dict
+  "prometheus" (dict "name" "PROMETHEUS_URL" "value" $.Values.monitoring.prometheusUrl)
+  "loki" (dict "name" "LOKI_URL" "value" $.Values.monitoring.lokiUrl)
+  "jaeger" (dict "name" "JAEGER_URL" "value" $.Values.monitoring.jaegerUrl)
+  "drain3" (dict "name" "TRIAGE_SERVICE_URL" "value" (printf "http://%s-triage:%v" $fullname $.Values.triageService.port))
+  "rca-history" (dict "name" "RCA_DB_PATH" "value" $.Values.rcaHistory.dbPath)
+-}}
+
+{{- range $name, $server := $servers }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-mcp-{{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+    app.kubernetes.io/component: mcp-{{ $name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- $selectorLabels | nindent 6 }}
+      app.kubernetes.io/component: mcp-{{ $name }}
+  template:
+    metadata:
+      annotations:
+        {{- if $prometheusScrape }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ $server.port | quote }}
+        prometheus.io/path: "/metrics"
+        {{- end }}
+      labels:
+        {{- $selectorLabels | nindent 8 }}
+        app.kubernetes.io/component: mcp-{{ $name }}
+    spec:
+      containers:
+        - name: mcp-{{ $name }}
+          image: "{{ $server.image }}:{{ $imageTag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ $server.port }}
+              protocol: TCP
+          {{- $env := index $envMap $name }}
+          env:
+            - name: {{ $env.name }}
+              value: {{ $env.value | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml $resources | nindent 12 }}
+          {{- if eq $name "rca-history" }}
+          volumeMounts:
+            - name: triage-data
+              mountPath: /data
+              readOnly: true
+          {{- end }}
+      {{- if eq $name "rca-history" }}
+      volumes:
+        - name: triage-data
+          persistentVolumeClaim:
+            claimName: {{ $fullname }}-triage-data
+      {{- end }}
+{{- end }}

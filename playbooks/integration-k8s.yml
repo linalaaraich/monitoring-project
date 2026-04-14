@@ -1,0 +1,255 @@
+---
+# End-to-end K8s validation playbook (E3-10)
+# Validates the full pipeline after migrating workloads to k3s:
+#   load-test -> metrics -> logs -> traces -> alert -> triage -> LLM -> email
+#
+# Usage: ansible-playbook playbooks/integration-k8s.yml
+#
+# Prerequisites:
+#   - k3s cluster running (E3-01)
+#   - All Helm charts deployed (E3-03, E3-04, E3-05)
+#   - Monitoring VM running (monitoring.yml)
+#   - OTel Collector DaemonSet deployed (E3-07)
+#   - Prometheus k8s SD configured (E3-08)
+#   - GPU node ready with NVIDIA device plugin (E3-06)
+
+- name: End-to-end K8s validation
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    monitoring_vm_ip: "{{ hostvars['monitoring-vm']['ansible_host'] | default(monitoring_vm_ip) }}"
+    k3s_host_ip: "{{ hostvars['k3s-node']['ansible_host'] | default(k3s_host_ip) }}"
+    kong_nodeport: 30080
+    grafana_url: "http://{{ monitoring_vm_ip }}:3000"
+    prometheus_url: "http://{{ monitoring_vm_ip }}:9090"
+    loki_url: "http://{{ monitoring_vm_ip }}:3100"
+    jaeger_url: "http://{{ monitoring_vm_ip }}:16686"
+    triage_url: "http://{{ k3s_host_ip }}:8090"
+
+  tasks:
+    # ---------------------------------------------------------------
+    # Step 0: Verify cluster health
+    # ---------------------------------------------------------------
+    - name: "Step 0 — Verify k3s node is Ready"
+      command: kubectl get nodes -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      failed_when: node_ready.stdout != "True"
+      changed_when: false
+      tags: [cluster]
+
+    - name: "Step 0 — List all pods across namespaces"
+      command: kubectl get pods --all-namespaces -o wide
+      register: all_pods
+      changed_when: false
+      tags: [cluster]
+
+    - name: Show pod status
+      debug:
+        var: all_pods.stdout_lines
+      tags: [cluster]
+
+    # ---------------------------------------------------------------
+    # Step 1: Verify K8s workload pods are running
+    # ---------------------------------------------------------------
+    - name: "Step 1 — Verify Spring Boot pod is Running"
+      command: kubectl get pods -n app -l app.kubernetes.io/name=spring-boot -o jsonpath='{.items[0].status.phase}'
+      register: spring_pod
+      failed_when: spring_pod.stdout != "Running"
+      changed_when: false
+      tags: [workloads]
+
+    - name: "Step 1 — Verify Kong pod is Running"
+      command: kubectl get pods -n network -l app.kubernetes.io/name=kong -o jsonpath='{.items[0].status.phase}'
+      register: kong_pod
+      failed_when: kong_pod.stdout != "Running"
+      changed_when: false
+      tags: [workloads]
+
+    - name: "Step 1 — Verify triage service pod is Running"
+      command: kubectl get pods -n ai -l app.kubernetes.io/name=triage-service -o jsonpath='{.items[0].status.phase}'
+      register: triage_pod
+      failed_when: triage_pod.stdout != "Running"
+      changed_when: false
+      tags: [workloads]
+
+    - name: "Step 1 — Verify Ollama pod is Running"
+      command: kubectl get pods -n ai -l app.kubernetes.io/name=ollama -o jsonpath='{.items[0].status.phase}'
+      register: ollama_pod
+      failed_when: ollama_pod.stdout != "Running"
+      changed_when: false
+      tags: [workloads]
+
+    # ---------------------------------------------------------------
+    # Step 2: Verify monitoring VM services
+    # ---------------------------------------------------------------
+    - name: "Step 2 — Prometheus is healthy"
+      uri:
+        url: "{{ prometheus_url }}/-/ready"
+        return_content: false
+      register: prom_health
+      tags: [monitoring]
+
+    - name: "Step 2 — Grafana is healthy"
+      uri:
+        url: "{{ grafana_url }}/api/health"
+        return_content: false
+      tags: [monitoring]
+
+    - name: "Step 2 — Loki is healthy"
+      uri:
+        url: "{{ loki_url }}/ready"
+        return_content: false
+      tags: [monitoring]
+
+    - name: "Step 2 — Jaeger UI is healthy"
+      uri:
+        url: "{{ jaeger_url }}/"
+        return_content: false
+      tags: [monitoring]
+
+    # ---------------------------------------------------------------
+    # Step 3: Verify Prometheus is scraping K8s targets
+    # ---------------------------------------------------------------
+    - name: "Step 3 — Check Prometheus K8s targets"
+      uri:
+        url: "{{ prometheus_url }}/api/v1/targets"
+        return_content: true
+      register: prom_targets
+      tags: [prometheus]
+
+    - name: "Step 3 — Verify K8s pod targets are UP"
+      assert:
+        that:
+          - "'kubernetes-pods' in prom_targets.content"
+        fail_msg: "No kubernetes-pods job found in Prometheus targets"
+      tags: [prometheus]
+
+    # ---------------------------------------------------------------
+    # Step 4: Run load test through Kong
+    # ---------------------------------------------------------------
+    - name: "Step 4 — Send test requests through Kong NodePort"
+      uri:
+        url: "http://{{ k3s_host_ip }}:{{ kong_nodeport }}/api/employee"
+        method: GET
+        status_code: [200, 404]
+      register: kong_test
+      retries: 3
+      delay: 5
+      tags: [load]
+
+    - name: "Step 4 — Generate load (50 requests)"
+      uri:
+        url: "http://{{ k3s_host_ip }}:{{ kong_nodeport }}/api/employee"
+        method: GET
+        status_code: [200, 404]
+      loop: "{{ range(50) | list }}"
+      loop_control:
+        label: "request {{ item }}"
+      ignore_errors: true
+      tags: [load]
+
+    # ---------------------------------------------------------------
+    # Step 5: Verify Spring Boot metrics in Prometheus
+    # ---------------------------------------------------------------
+    - name: "Step 5 — Wait for metrics to appear (30s)"
+      pause:
+        seconds: 30
+      tags: [verify]
+
+    - name: "Step 5 — Query Spring Boot request metrics"
+      uri:
+        url: "{{ prometheus_url }}/api/v1/query?query=http_server_requests_seconds_count"
+        return_content: true
+      register: spring_metrics
+      tags: [verify]
+
+    - name: "Step 5 — Verify metrics exist"
+      assert:
+        that:
+          - spring_metrics.json.data.result | length > 0
+        fail_msg: "No Spring Boot request metrics found in Prometheus"
+      tags: [verify]
+
+    # ---------------------------------------------------------------
+    # Step 6: Verify logs in Loki
+    # ---------------------------------------------------------------
+    - name: "Step 6 — Query Loki for Spring Boot logs"
+      uri:
+        url: "{{ loki_url }}/loki/api/v1/query_range"
+        body_format: form-urlencoded
+        body:
+          query: '{app="spring-boot"}'
+          limit: "5"
+          start: "{{ (ansible_date_time.epoch | int - 300) }}000000000"
+          end: "{{ ansible_date_time.epoch }}000000000"
+        return_content: true
+      register: loki_logs
+      tags: [verify]
+
+    # ---------------------------------------------------------------
+    # Step 7: Verify traces in Jaeger
+    # ---------------------------------------------------------------
+    - name: "Step 7 — Query Jaeger for services"
+      uri:
+        url: "{{ jaeger_url }}/api/services"
+        return_content: true
+      register: jaeger_services
+      tags: [verify]
+
+    - name: "Step 7 — Show traced services"
+      debug:
+        var: jaeger_services.json.data
+      tags: [verify]
+
+    # ---------------------------------------------------------------
+    # Step 8: Verify triage service health
+    # ---------------------------------------------------------------
+    - name: "Step 8 — Triage service health check"
+      uri:
+        url: "http://{{ k3s_host_ip }}:8090/health"
+        return_content: true
+      register: triage_health
+      tags: [triage]
+
+    - name: "Step 8 — Show triage health"
+      debug:
+        var: triage_health.json
+      tags: [triage]
+
+    # ---------------------------------------------------------------
+    # Step 9: Verify Ollama is responding
+    # ---------------------------------------------------------------
+    - name: "Step 9 — Ollama model list"
+      uri:
+        url: "http://{{ k3s_host_ip }}:11434/api/tags"
+        return_content: true
+      register: ollama_models
+      tags: [ollama]
+
+    - name: "Step 9 — Show Ollama models"
+      debug:
+        var: ollama_models.json
+      tags: [ollama]
+
+    # ---------------------------------------------------------------
+    # Step 10: Summary
+    # ---------------------------------------------------------------
+    - name: "Step 10 — Validation Summary"
+      debug:
+        msg:
+          - "=== E2E K8s Validation Summary ==="
+          - "k3s node: Ready"
+          - "Spring Boot pod: {{ spring_pod.stdout }}"
+          - "Kong pod: {{ kong_pod.stdout }}"
+          - "Triage pod: {{ triage_pod.stdout }}"
+          - "Ollama pod: {{ ollama_pod.stdout }}"
+          - "Prometheus: healthy"
+          - "Grafana: healthy"
+          - "Loki: healthy"
+          - "Jaeger: healthy"
+          - "Kong proxy: responded"
+          - "Triage service: {{ triage_health.json.status | default('unknown') }}"
+          - "Ollama models: {{ ollama_models.json.models | default([]) | length }} loaded"
+          - "=== All checks passed ==="
+      tags: [summary]

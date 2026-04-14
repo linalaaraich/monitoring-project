@@ -1,0 +1,90 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imageTag: "latest"
+
+triageService:
+  image: cires/triage-service
+  port: 8090
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+mcpServers:
+  prometheus:
+    image: cires/mcp-prometheus
+    port: 8091
+  loki:
+    image: cires/mcp-loki
+    port: 8092
+  jaeger:
+    image: cires/mcp-jaeger
+    port: 8093
+  drain3:
+    image: cires/mcp-drain3
+    port: 8094
+  rcaHistory:
+    image: cires/mcp-rca-history
+    port: 8095
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+ollama:
+  image: ollama/ollama
+  tag: latest
+  port: 11434
+  model: "llama3.1:8b"
+  storage: 20Gi
+  gpu:
+    enabled: true
+    count: 1
+  # Set to false if running on same node, true if on separate GPU node
+  separateNode: false
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+    limits:
+      cpu: "4"
+      memory: 16Gi
+
+# External service endpoints (monitoring VM)
+monitoring:
+  prometheusUrl: "http://MONITORING_VM_IP:9090"
+  lokiUrl: "http://MONITORING_VM_IP:3100"
+  jaegerUrl: "http://MONITORING_VM_IP:16686"
+
+# SMTP for escalation emails
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  user: ""
+  password: ""
+  from: ""
+  notificationEmail: ""
+
+# Grafana dashboard URL for email links
+grafanaDashboardUrl: "http://MONITORING_VM_IP:3000"
+
+# Drain3 config
+drain3:
+  stateDir: /data/drain3_state
+  pollInterval: 30
+
+# RCA History database
+rcaHistory:
+  dbPath: /data/rca_history.db
+
+prometheus:
+  scrape: true

@@ -1,0 +1,23 @@
+---
+# Test pod to verify GPU passthrough works
+# Usage: kubectl apply -f test-gpu-pod.yaml
+#        kubectl logs gpu-test
+#        kubectl delete pod gpu-test
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-test
+  namespace: default
+spec:
+  restartPolicy: Never
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  containers:
+    - name: cuda-test
+      image: nvidia/cuda:12.0.0-base-ubuntu22.04
+      command: ["nvidia-smi"]
+      resources:
+        limits:
+          nvidia.com/gpu: 1

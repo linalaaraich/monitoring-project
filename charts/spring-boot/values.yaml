@@ -1,0 +1,45 @@
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: mukundmadhav/react-springboot-mysql
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+# RDS connection (from Terraform outputs)
+database:
+  url: "jdbc:mysql://RDS_ENDPOINT:3306/app_db"
+  username: "appuser"
+  password: ""
+
+# OTel Java Agent
+otel:
+  enabled: true
+  agentVersion: "2.11.0"
+  serviceName: "react-springboot-app"
+  exporterEndpoint: "http://otel-collector.observability.svc.cluster.local:4317"
+
+# Prometheus scraping annotations
+prometheus:
+  scrape: true
+  port: 8080
+  path: /actuator/prometheus
+
+serviceAccount:
+  create: true
+  name: ""

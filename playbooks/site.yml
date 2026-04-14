@@ -1,14 +1,34 @@
 ---
-# Master playbook — deploys full observability + AI RCA stack across all VMs
-# Usage: ansible-playbook playbooks/site.yml
-# Per-group: ansible-playbook playbooks/monitoring.yml
-#            ansible-playbook playbooks/application.yml
-#            ansible-playbook playbooks/network.yml
-#            ansible-playbook playbooks/ai.yml
+# Master playbook — deploys full observability + K8s workloads
+#
+# Usage:
+#   ansible-playbook playbooks/site.yml              # Full deployment
+#   ansible-playbook playbooks/monitoring.yml        # Monitoring VM only
+#   ansible-playbook playbooks/k3s.yml               # k3s bootstrap + images
+#   ansible-playbook playbooks/k8s-manifests.yml     # K8s manifests (OTel, NVIDIA, Prom RBAC)
+#   ansible-playbook playbooks/integration-k8s.yml   # E2E validation
+#
+# After site.yml completes, install Helm charts manually:
+#   helm install spring-boot charts/spring-boot/ -n app --create-namespace
+#   kubectl apply -f charts/kong/kong-config.yaml
+#   helm install kong kong/kong --version 2.38.0 -f charts/kong/values-k3s.yaml -n network --create-namespace
+#   helm install ai-stack charts/ai-stack/ -n ai --create-namespace
 
+# Step 1: Deploy monitoring VM (Prometheus, Grafana, Loki, Jaeger)
 - import_playbook: monitoring.yml
-- import_playbook: application.yml
-- import_playbook: network.yml
-- import_playbook: ai.yml
-# Integration tests (run after deployment)
-- import_playbook: integration.yml
+
+# Step 2: Bootstrap k3s and import container images
+- import_playbook: k3s.yml
+
+# Step 3: Deploy K8s manifests (OTel DaemonSet, NVIDIA plugin, Prometheus RBAC)
+- import_playbook: k8s-manifests.yml
+
+# Step 4: Helm charts are installed manually (see commands above)
+# Step 5: Run validation
+# - import_playbook: integration-k8s.yml
+
+# Legacy VM-based deployment (replaced by k3s in Sprint 2 extension)
+# - import_playbook: application.yml
+# - import_playbook: network.yml
+# - import_playbook: ai.yml
+# - import_playbook: integration.yml

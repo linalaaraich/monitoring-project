@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-stack.fullname" . }}-ollama
+  labels:
+    {{- include "ai-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ollama
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.ollama.port }}
+      targetPort: {{ .Values.ollama.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ai-stack.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ollama

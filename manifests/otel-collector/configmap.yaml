@@ -1,0 +1,119 @@
+---
+# OTel Collector configuration for in-cluster DaemonSet (E3-07)
+# Collects logs via filelog receiver and traces via OTLP receiver
+# Enriches with K8s metadata via k8sattributes processor
+# Forwards to monitoring VM (Loki + Jaeger via OTel Collector on monitoring VM)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      # Collect container logs from /var/log/pods
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/kube-system_*/*/*.log
+          - /var/log/pods/observability_otel-collector*/*/*.log
+        start_at: end
+        include_file_path: true
+        include_file_name: false
+        operators:
+          # Parse CRI-O / containerd log format
+          - type: regex_parser
+            id: container-parser
+            regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            timestamp:
+              parse_from: attributes.time
+              layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+          # Extract trace_id from log body if present
+          - type: regex_parser
+            id: trace-id-parser
+            if: 'attributes.log != nil and attributes.log matches "trace_id"'
+            regex: 'trace_id[=: ]*(?P<trace_id>[a-f0-9]{32})'
+            parse_from: attributes.log
+            on_error: send
+          # Move log body to body field
+          - type: move
+            from: attributes.log
+            to: body
+
+      # Receive traces and logs from application pods via OTLP
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      # Enrich with Kubernetes metadata
+      k8sattributes:
+        auth_type: "serviceAccount"
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.namespace.name
+            - k8s.container.name
+            - k8s.deployment.name
+            - k8s.node.name
+          labels:
+            - tag_name: app
+              key: app.kubernetes.io/name
+              from: pod
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+          - sources:
+              - from: connection
+
+      # Add resource attributes
+      resource:
+        attributes:
+          - key: k8s.cluster.name
+            value: "cires-observability"
+            action: upsert
+
+      # Batch for efficiency
+      batch:
+        send_batch_size: 1024
+        timeout: 5s
+
+    exporters:
+      # Forward traces to monitoring VM OTel Collector -> Jaeger
+      otlp/traces:
+        endpoint: "${MONITORING_VM_IP}:4317"
+        tls:
+          insecure: true
+
+      # Forward logs to Loki on monitoring VM
+      loki:
+        endpoint: "http://${MONITORING_VM_IP}:3100/loki/api/v1/push"
+        default_labels_enabled:
+          exporter: false
+          job: true
+
+      # Debug logging (disable in production)
+      # debug:
+      #   verbosity: detailed
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [k8sattributes, resource, batch]
+          exporters: [otlp/traces]
+        logs:
+          receivers: [filelog, otlp]
+          processors: [k8sattributes, resource, batch]
+          exporters: [loki]

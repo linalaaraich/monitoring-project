@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-stack.fullname" . }}-ollama
+  labels:
+    {{- include "ai-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ollama
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ai-stack.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ollama
+  template:
+    metadata:
+      labels:
+        {{- include "ai-stack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ollama
+    spec:
+      {{- with .Values.ollama.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ollama.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ollama
+          image: "{{ .Values.ollama.image }}:{{ .Values.ollama.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.ollama.port }}
+              protocol: TCP
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    sleep 10 && ollama pull {{ .Values.ollama.model }}
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "curl -sf http://localhost:{{ .Values.ollama.port }}/api/tags || exit 1"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "curl -sf http://localhost:{{ .Values.ollama.port }}/api/tags || exit 1"
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.ollama.resources.requests.cpu | quote }}
+              memory: {{ .Values.ollama.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.ollama.resources.limits.cpu | quote }}
+              memory: {{ .Values.ollama.resources.limits.memory | quote }}
+              {{- if .Values.ollama.gpu.enabled }}
+              nvidia.com/gpu: {{ .Values.ollama.gpu.count | quote }}
+              {{- end }}
+      volumes:
+        - name: ollama-data
+          persistentVolumeClaim:
+            claimName: {{ include "ai-stack.fullname" . }}-ollama-data

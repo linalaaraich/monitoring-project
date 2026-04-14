@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-stack.fullname" . }}-triage
+  labels:
+    {{- include "ai-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: triage-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ai-stack.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: triage-service
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.prometheus.scrape }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.triageService.port | quote }}
+        prometheus.io/path: "/metrics"
+        {{- end }}
+      labels:
+        {{- include "ai-stack.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: triage-service
+    spec:
+      containers:
+        - name: triage-service
+          image: "{{ .Values.triageService.image }}:{{ .Values.imageTag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.triageService.port }}
+              protocol: TCP
+          env:
+            - name: OLLAMA_URL
+              value: "http://{{ include "ai-stack.fullname" . }}-ollama:{{ .Values.ollama.port }}"
+            - name: OLLAMA_MODEL
+              value: {{ .Values.ollama.model | quote }}
+            - name: PROMETHEUS_MCP_URL
+              value: "http://{{ include "ai-stack.fullname" . }}-mcp-prometheus:{{ .Values.mcpServers.prometheus.port }}"
+            - name: LOKI_MCP_URL
+              value: "http://{{ include "ai-stack.fullname" . }}-mcp-loki:{{ .Values.mcpServers.loki.port }}"
+            - name: JAEGER_MCP_URL
+              value: "http://{{ include "ai-stack.fullname" . }}-mcp-jaeger:{{ .Values.mcpServers.jaeger.port }}"
+            - name: DRAIN3_MCP_URL
+              value: "http://{{ include "ai-stack.fullname" . }}-mcp-drain3:{{ .Values.mcpServers.drain3.port }}"
+            - name: RCA_HISTORY_MCP_URL
+              value: "http://{{ include "ai-stack.fullname" . }}-mcp-rca-history:{{ .Values.mcpServers.rcaHistory.port }}"
+            - name: LOKI_API_URL
+              value: {{ .Values.monitoring.lokiUrl | quote }}
+            - name: GRAFANA_DASHBOARD_URL
+              value: {{ .Values.grafanaDashboardUrl | quote }}
+            - name: DRAIN3_STATE_DIR
+              value: {{ .Values.drain3.stateDir | quote }}
+            - name: DRAIN3_POLL_INTERVAL
+              value: {{ .Values.drain3.pollInterval | quote }}
+            - name: RCA_DB_PATH
+              value: {{ .Values.rcaHistory.dbPath | quote }}
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ai-stack.fullname" . }}-smtp-secret
+                  key: host
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ai-stack.fullname" . }}-smtp-secret
+                  key: port
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ai-stack.fullname" . }}-smtp-secret
+                  key: user
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ai-stack.fullname" . }}-smtp-secret
+                  key: password
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ai-stack.fullname" . }}-smtp-secret
+                  key: from
+            - name: NOTIFICATION_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ai-stack.fullname" . }}-smtp-secret
+                  key: notificationEmail
+          volumeMounts:
+            - name: triage-data
+              mountPath: /data
+            - name: drain3-config
+              mountPath: /etc/drain3
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.triageService.resources | nindent 12 }}
+      volumes:
+        - name: triage-data
+          persistentVolumeClaim:
+            claimName: {{ include "ai-stack.fullname" . }}-triage-data
+        - name: drain3-config
+          configMap:
+            name: {{ include "ai-stack.fullname" . }}-drain3-config

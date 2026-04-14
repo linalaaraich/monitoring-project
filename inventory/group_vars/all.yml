@@ -26,6 +26,7 @@ common_packages:
   - unzip
   - ca-certificates
   - gnupg
+  - rsync
 
 docker_compose_version: "5.0.1"
 
@@ -47,3 +48,7 @@ otel_collector_grpc_port: 4317
 otel_collector_http_port: 4318
 otel_collector_metrics_port: 8888
 otel_collector_health_port: 13133
+
+# k3s cluster endpoints (update from Terraform outputs)
+k3s_host_ip: "<K3S_HOST_IP>"
+gpu_host_ip: "<GPU_HOST_IP>"

@@ -5,22 +5,35 @@ all:
         monitoring-vm:
           ansible_host: 192.168.127.10
           ansible_user: deploy
-    application:
+    k3s_cluster:
       hosts:
-        application-vm:
-          ansible_host: 192.168.127.30
+        k3s-node:
+          ansible_host: <K3S_HOST_IP>
           ansible_user: deploy
-          app_port: 8080
-    network:
+          k3s_control_node: true
+    gpu:
       hosts:
-        network-vm:
-          ansible_host: 192.168.127.15
+        gpu-vm:
+          ansible_host: <GPU_HOST_IP>
           ansible_user: deploy
-    ai:
-      hosts:
-        ai-vm:
-          ansible_host: <AI_VM_IP>
-          ansible_user: deploy
+    # Legacy groups (replaced by k3s_cluster + gpu in Sprint 2 extension)
+    # Kept for reference — do not use with the K8s deployment path
+    # application:
+    #   hosts:
+    #     application-vm:
+    #       ansible_host: 192.168.127.30
+    #       ansible_user: deploy
+    #       app_port: 8080
+    # network:
+    #   hosts:
+    #     network-vm:
+    #       ansible_host: 192.168.127.15
+    #       ansible_user: deploy
+    # ai:
+    #   hosts:
+    #     ai-vm:
+    #       ansible_host: <AI_VM_IP>
+    #       ansible_user: deploy
   vars:
     ansible_python_interpreter: /usr/bin/python3
     ansible_ssh_private_key_file: ~/.ssh/ansible_key

@@ -1,0 +1,61 @@
+---
+# Prometheus ServiceAccount + RBAC for kubernetes_sd_configs (E3-08)
+# This SA runs inside the k3s cluster. Its token is extracted and placed
+# on the monitoring VM so external Prometheus can scrape K8s targets.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: observability-platform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-scraper
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-scraper
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - nodes/metrics
+      - pods
+      - services
+      - endpoints
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-scraper
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-scraper
+    namespace: observability
+roleRef:
+  kind: ClusterRole
+  name: prometheus-scraper
+  apiGroup: rbac.authorization.k8s.io
+---
+# Long-lived token secret for the ServiceAccount
+# (K8s 1.24+ no longer auto-creates tokens)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-scraper-token
+  namespace: observability
+  annotations:
+    kubernetes.io/service-account.name: prometheus-scraper
+type: kubernetes.io/service-account-token

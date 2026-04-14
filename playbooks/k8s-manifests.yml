@@ -1,0 +1,107 @@
+---
+# Deploy K8s manifests to the k3s cluster (E3-06, E3-07, E3-08)
+#
+# This playbook applies raw K8s manifests that don't use Helm.
+# It runs kubectl from the control machine (requires kubeconfig from k3s.yml).
+#
+# Usage:
+#   ansible-playbook playbooks/k8s-manifests.yml                     # All
+#   ansible-playbook playbooks/k8s-manifests.yml --tags otel         # OTel only
+#   ansible-playbook playbooks/k8s-manifests.yml --tags nvidia       # NVIDIA only
+#   ansible-playbook playbooks/k8s-manifests.yml --tags prometheus   # Prom RBAC only
+
+- name: Deploy K8s manifests
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    monitoring_vm_ip: "{{ hostvars['monitoring-vm']['ansible_host'] | default(lookup('env', 'MONITORING_VM_IP') | default('MONITORING_VM_IP_NOT_SET', true)) }}"
+    manifests_dir: "{{ playbook_dir }}/../manifests"
+
+  tasks:
+    # ---------------------------------------------------------------
+    # OTel Collector DaemonSet (E3-07)
+    # ---------------------------------------------------------------
+    - name: Create observability namespace
+      command: kubectl apply -f {{ manifests_dir }}/otel-collector/namespace.yaml
+      tags: [otel]
+
+    - name: Apply OTel Collector RBAC
+      command: kubectl apply -f {{ manifests_dir }}/otel-collector/rbac.yaml
+      tags: [otel]
+
+    - name: Template OTel Collector ConfigMap with monitoring VM IP
+      template:
+        src: "{{ manifests_dir }}/otel-collector/configmap.yaml"
+        dest: /tmp/otel-collector-configmap-rendered.yaml
+      vars:
+        rendered_monitoring_ip: "{{ monitoring_vm_ip }}"
+      tags: [otel]
+
+    - name: Apply OTel Collector ConfigMap (with IP substitution)
+      shell: |
+        sed 's/${MONITORING_VM_IP}/{{ monitoring_vm_ip }}/g' \
+          {{ manifests_dir }}/otel-collector/configmap.yaml | kubectl apply -f -
+      tags: [otel]
+
+    - name: Apply OTel Collector DaemonSet (with IP substitution)
+      shell: |
+        sed 's/REPLACE_WITH_MONITORING_VM_IP/{{ monitoring_vm_ip }}/g' \
+          {{ manifests_dir }}/otel-collector/daemonset.yaml | kubectl apply -f -
+      tags: [otel]
+
+    - name: Wait for OTel Collector pods to be ready
+      command: kubectl rollout status daemonset/otel-collector -n observability --timeout=120s
+      tags: [otel]
+
+    # ---------------------------------------------------------------
+    # NVIDIA Device Plugin (E3-06)
+    # ---------------------------------------------------------------
+    - name: Apply NVIDIA device plugin DaemonSet
+      command: kubectl apply -f {{ manifests_dir }}/nvidia-device-plugin/daemonset.yaml
+      tags: [nvidia]
+
+    - name: Wait for NVIDIA device plugin to be ready
+      command: kubectl rollout status daemonset/nvidia-device-plugin-daemonset -n kube-system --timeout=120s
+      tags: [nvidia]
+
+    - name: Verify GPU is schedulable
+      command: kubectl get nodes -o jsonpath='{.items[0].status.allocatable.nvidia\.com/gpu}'
+      register: gpu_count
+      failed_when: gpu_count.stdout == "" or gpu_count.stdout == "0"
+      ignore_errors: true
+      tags: [nvidia]
+
+    - name: Show GPU allocation
+      debug:
+        msg: "GPU resources available: {{ gpu_count.stdout | default('none detected') }}"
+      tags: [nvidia]
+
+    # ---------------------------------------------------------------
+    # Prometheus RBAC for kubernetes_sd_configs (E3-08)
+    # ---------------------------------------------------------------
+    - name: Apply Prometheus scraper RBAC
+      command: kubectl apply -f {{ manifests_dir }}/prometheus-rbac/rbac.yaml
+      tags: [prometheus]
+
+    - name: Wait for ServiceAccount token to be generated
+      command: kubectl get secret prometheus-scraper-token -n observability -o jsonpath='{.data.token}'
+      register: prom_token_b64
+      until: prom_token_b64.stdout != ""
+      retries: 10
+      delay: 5
+      tags: [prometheus]
+
+    - name: Decode and save Prometheus token locally
+      shell: |
+        echo '{{ prom_token_b64.stdout }}' | base64 -d > /tmp/k3s-prometheus-token
+      tags: [prometheus]
+
+    - name: Show next step for Prometheus token
+      debug:
+        msg: >
+          Prometheus SA token saved to /tmp/k3s-prometheus-token.
+          Copy it to the monitoring VM:
+            scp /tmp/k3s-prometheus-token deploy@{{ monitoring_vm_ip }}:/etc/prometheus/k3s-token
+          Then set k3s_sd_enabled=true in monitoring.yml and re-run the monitoring playbook.
+      tags: [prometheus]

@@ -147,6 +147,8 @@ Spring Boot logs include `trace_id` in the log output (injected by the OTel Java
 
 ## 4. AI RCA Pipeline — Three Layers
 
+**Important:** The triage service (Layer 2) is the sole orchestrator and action-taker in this pipeline. It receives alerts, calls Ollama, and — after receiving the LLM's analysis — sends the escalation email with the RCA report via SMTP, or logs the dismiss. Ollama (Layer 3) only produces analysis and returns it to the triage service. It does not send emails, store history, or take any external action.
+
 ### 4.1 Architecture Overview
 
 ```

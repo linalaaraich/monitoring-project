@@ -1,0 +1,92 @@
+---
+# Bootstrap k3s cluster and deploy workloads via Helm (E3-01, E3-02)
+#
+# Usage:
+#   ansible-playbook playbooks/k3s.yml                    # Full run
+#   ansible-playbook playbooks/k3s.yml --tags bootstrap    # k3s only
+#   ansible-playbook playbooks/k3s.yml --tags images       # Image build only
+#
+# Prerequisites:
+#   - Target host is in the k3s_cluster inventory group
+#   - SSH access configured (ansible_host, ansible_user)
+#   - Docker role will be applied automatically
+#   - Source repos (monitoring-triage-service, monitoring-mcp-servers)
+#     must exist alongside this repo on the control machine
+
+- name: Bootstrap k3s single-node cluster
+  hosts: k3s_cluster
+  become: true
+  tags: [bootstrap]
+  roles:
+    - role: common
+    - role: docker
+    - role: xanmanning.k3s
+
+  post_tasks:
+    - name: Wait for k3s to be ready
+      command: k3s kubectl get nodes
+      register: k3s_wait
+      until: "'Ready' in k3s_wait.stdout"
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Ensure .kube directory exists on control machine
+      file:
+        path: "{{ lookup('env', 'HOME') }}/.kube"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      become: false
+
+    - name: Fetch kubeconfig from k3s node
+      fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /tmp/k3s-kubeconfig.yaml
+        flat: true
+
+    - name: Rewrite kubeconfig server URL from 127.0.0.1 to EC2 IP
+      replace:
+        path: /tmp/k3s-kubeconfig.yaml
+        regexp: 'https://127\.0\.0\.1:6443'
+        replace: "https://{{ ansible_host }}:6443"
+      delegate_to: localhost
+      become: false
+
+    - name: Install kubeconfig on control machine
+      copy:
+        src: /tmp/k3s-kubeconfig.yaml
+        dest: "{{ lookup('env', 'HOME') }}/.kube/config"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify k3s from control machine
+      command: kubectl get nodes -o wide
+      delegate_to: localhost
+      become: false
+      register: k3s_nodes
+      changed_when: false
+
+    - name: Show k3s nodes
+      debug:
+        var: k3s_nodes.stdout_lines
+
+    - name: Install Helm on control machine (if missing)
+      shell: |
+        if ! command -v helm &>/dev/null; then
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        else
+          echo "Helm already installed"
+        fi
+      delegate_to: localhost
+      become: false
+      register: helm_install
+      changed_when: "'installed' not in helm_install.stdout"
+
+- name: Build and import container images into k3s
+  hosts: k3s_cluster
+  become: true
+  tags: [images]
+  roles:
+    - role: k3s_images

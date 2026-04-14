@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ai-stack.fullname" . }}-triage-data
+  labels:
+    {{- include "ai-stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: triage-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

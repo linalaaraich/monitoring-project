@@ -1,0 +1,38 @@
+---
+image_tag: "{{ hostvars[inventory_hostname]['image_tag'] | default('latest') }}"
+
+# Remote build directory on the k3s host
+remote_build_dir: /opt/image-build
+
+# Source repos (on Ansible control machine — will be synced to remote)
+triage_service_local_repo: "{{ playbook_dir }}/../../monitoring-triage-service"
+mcp_servers_local_repo: "{{ playbook_dir }}/../../monitoring-mcp-servers"
+
+# Images to build and import into k3s containerd
+# context_subdir: directory within remote_build_dir that contains the Dockerfile context
+# dockerfile_rel: path to Dockerfile relative to context_subdir
+first_party_images:
+  - name: cires/triage-service
+    src_repo: "{{ triage_service_local_repo }}"
+    remote_subdir: triage-service
+    dockerfile_rel: Dockerfile
+  - name: cires/mcp-prometheus
+    src_repo: "{{ mcp_servers_local_repo }}"
+    remote_subdir: mcp-servers
+    dockerfile_rel: prometheus_mcp/Dockerfile
+  - name: cires/mcp-loki
+    src_repo: "{{ mcp_servers_local_repo }}"
+    remote_subdir: mcp-servers
+    dockerfile_rel: loki_mcp/Dockerfile
+  - name: cires/mcp-jaeger
+    src_repo: "{{ mcp_servers_local_repo }}"
+    remote_subdir: mcp-servers
+    dockerfile_rel: jaeger_mcp/Dockerfile
+  - name: cires/mcp-drain3
+    src_repo: "{{ mcp_servers_local_repo }}"
+    remote_subdir: mcp-servers
+    dockerfile_rel: drain3_mcp/Dockerfile
+  - name: cires/mcp-rca-history
+    src_repo: "{{ mcp_servers_local_repo }}"
+    remote_subdir: mcp-servers
+    dockerfile_rel: rca_history_mcp/Dockerfile

@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "spring-boot.fullname" . }}
+  labels:
+    {{- include "spring-boot.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "spring-boot.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.prometheus.scrape }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.prometheus.port | quote }}
+        prometheus.io/path: {{ .Values.prometheus.path | quote }}
+        {{- end }}
+      labels:
+        {{- include "spring-boot.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "spring-boot.serviceAccountName" . }}
+      {{- if .Values.otel.enabled }}
+      initContainers:
+        - name: otel-agent-init
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              wget -O /otel-agent/opentelemetry-javaagent.jar \
+                "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v{{ .Values.otel.agentVersion }}/opentelemetry-javaagent.jar"
+          volumeMounts:
+            - name: otel-agent
+              mountPath: /otel-agent
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "spring-boot.fullname" . }}-config
+                  key: spring.datasource.url
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "spring-boot.fullname" . }}-db-secret
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "spring-boot.fullname" . }}-db-secret
+                  key: password
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: "update"
+            {{- if .Values.otel.enabled }}
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/otel-agent/opentelemetry-javaagent.jar"
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.otel.serviceName | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.exporterEndpoint | quote }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "grpc"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+            - name: OTEL_PROPAGATORS
+              value: "tracecontext,baggage,b3multi"
+            - name: OTEL_INSTRUMENTATION_JDBC_ENABLED
+              value: "true"
+            - name: OTEL_INSTRUMENTATION_SPRING_WEB_ENABLED
+              value: "true"
+            - name: OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED
+              value: "true"
+            {{- end }}
+          {{- if .Values.otel.enabled }}
+          volumeMounts:
+            - name: otel-agent
+              mountPath: /otel-agent
+              readOnly: true
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.otel.enabled }}
+      volumes:
+        - name: otel-agent
+          emptyDir: {}
+      {{- end }}
