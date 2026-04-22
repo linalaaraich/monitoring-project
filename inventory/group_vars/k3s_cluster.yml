@@ -2,6 +2,11 @@
 # k3s cluster configuration
 k3s_release_version: "v1.30.6+k3s1"
 
+# xanmanning.k3s role's become default is false — we need sudo to write
+# /usr/local/bin/k3s and install the systemd service. Without this the
+# role fails on "Destination /usr/local/bin is not writable".
+k3s_become: true
+
 # Disable Traefik — Kong is our ingress
 k3s_server:
   disable:

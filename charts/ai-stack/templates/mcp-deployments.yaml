@@ -79,10 +79,11 @@ spec:
           resources:
             {{- toYaml $resources | nindent 12 }}
           {{- if eq $name "rca-history" }}
+          # Read-write — rca-history creates + writes its SQLite DB at /data.
+          # A read-only mount caused "unable to open database file" on startup.
           volumeMounts:
             - name: triage-data
               mountPath: /data
-              readOnly: true
           {{- end }}
       {{- if eq $name "rca-history" }}
       volumes:
