@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "frontend.fullname" . }}-html
+  namespace: frontend
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>{{ .Values.branding.title }}</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        :root { --bg:#0f1218; --panel:#171b24; --border:#262b36; --text:#e4e7ef; --muted:#8a94a6; --accent:#4ea8de; }
+        * { box-sizing: border-box; }
+        body { margin:0; font:14px/1.6 -apple-system,BlinkMacSystemFont,system-ui,sans-serif; background:var(--bg); color:var(--text); }
+        header { padding:40px 24px 20px; max-width:920px; margin:0 auto; }
+        h1 { margin:0 0 4px; font-size:28px; font-weight:600; }
+        .sub { color:var(--muted); }
+        main { max-width:920px; margin:0 auto; padding:20px 24px 40px; }
+        .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+        a.card { display:block; padding:18px; background:var(--panel); border:1px solid var(--border); border-radius:8px; color:var(--text); text-decoration:none; transition:border-color .15s; }
+        a.card:hover { border-color:var(--accent); }
+        a.card h3 { margin:0 0 6px; font-size:16px; color:var(--accent); }
+        a.card p { margin:0; color:var(--muted); font-size:13px; }
+        footer { max-width:920px; margin:0 auto; padding:20px 24px; color:var(--muted); font-size:12px; border-top:1px solid var(--border); }
+      </style>
+    </head>
+    <body>
+      <header>
+        <h1>{{ .Values.branding.title }}</h1>
+        <div class="sub">{{ .Values.branding.subtitle }}</div>
+      </header>
+      <main>
+        <div class="grid">
+          <a class="card" href="{{ .Values.links.grafana }}" target="_blank">
+            <h3>Grafana &rarr;</h3>
+            <p>Dashboards, alerts, metrics &amp; logs</p>
+          </a>
+          <a class="card" href="{{ .Values.links.triageDashboard }}" target="_blank">
+            <h3>AI Triage &rarr;</h3>
+            <p>Decision history, escalations, RCA</p>
+          </a>
+          <a class="card" href="{{ .Values.links.jaeger }}" target="_blank">
+            <h3>Jaeger &rarr;</h3>
+            <p>Distributed traces</p>
+          </a>
+          <a class="card" href="{{ .Values.links.prometheus }}" target="_blank">
+            <h3>Prometheus &rarr;</h3>
+            <p>Raw metrics &amp; PromQL</p>
+          </a>
+        </div>
+      </main>
+      <footer>CIRES Technologies &middot; Sprint 2 demo &middot; served from in-cluster nginx</footer>
+    </body>
+    </html>
+  nginx.conf: |
+    server {
+      listen 80;
+      server_name _;
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+      }
+    }

@@ -1,0 +1,35 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: nginx
+  tag: "1.27-alpine"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: NodePort
+  port: 80
+  nodePort: 30800
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+# URLs shown on the portal. Override per-environment from the command line
+# or a values file — these defaults assume the monitoring VM is reachable
+# from the browser that's opening the portal.
+links:
+  grafana: "http://MONITORING_VM_IP:3000"
+  triageDashboard: "http://K3S_NODE_IP:30090/dashboard"
+  jaeger: "http://MONITORING_VM_IP:16686"
+  prometheus: "http://MONITORING_VM_IP:9090"
+
+branding:
+  title: "CIRES Observability Platform"
+  subtitle: "AI-powered root cause analysis demo"
