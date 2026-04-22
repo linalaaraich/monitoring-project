@@ -66,6 +66,10 @@ spec:
               value: {{ .Values.drain3.pollInterval | quote }}
             - name: RCA_DB_PATH
               value: {{ .Values.rcaHistory.dbPath | quote }}
+            - name: TRIAGE_SUPPRESSION_ENABLED
+              value: {{ .Values.triageService.suppressionEnabled | default true | quote }}
+            - name: TRIAGE_HISTORY_LOOKBACK_MINUTES
+              value: {{ .Values.triageService.historyLookbackMinutes | default 15 | quote }}
             - name: SMTP_HOST
               valueFrom:
                 secretKeyRef:

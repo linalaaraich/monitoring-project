@@ -1,11 +1,16 @@
 nameOverride: ""
 fullnameOverride: ""
 
-imageTag: "latest"
+imageTag: "2026-04-22b"
 
 triageService:
   image: cires/triage-service
   port: 8090
+  # Layer 2 pre-LLM suppression — if the same (alert_name, service) was
+  # dismissed (or suppressed) within the lookback window, skip the Ollama
+  # call entirely. Saves 3–15 min of CPU inference per noisy repeat alert.
+  suppressionEnabled: true
+  historyLookbackMinutes: 15
   # CPU inference on llama3.2:3b with real-sized, 3-pillar context takes
   # 10-15 min per Ollama call in practice (verified empirically on an
   # AWS t3.xlarge with 4 vCPUs). The per-request timeout must give the
