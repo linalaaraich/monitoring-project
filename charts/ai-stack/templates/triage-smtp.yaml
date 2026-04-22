@@ -1,0 +1,16 @@
+{{- if .Values.smtp.password }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "ai-stack.fullname" . }}-smtp-secret
+  labels:
+    {{- include "ai-stack.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  host: {{ .Values.smtp.host | quote }}
+  port: {{ .Values.smtp.port | quote }}
+  user: {{ .Values.smtp.user | quote }}
+  password: {{ .Values.smtp.password | quote }}
+  from: {{ .Values.smtp.from | quote }}
+  notificationEmail: {{ .Values.smtp.notificationEmail | quote }}
+{{- end }}
