@@ -14,9 +14,9 @@
 -}}
 
 {{- $envMap := dict
-  "prometheus" (dict "name" "PROMETHEUS_URL" "value" $.Values.monitoring.prometheusUrl)
-  "loki" (dict "name" "LOKI_URL" "value" $.Values.monitoring.lokiUrl)
-  "jaeger" (dict "name" "JAEGER_URL" "value" $.Values.monitoring.jaegerUrl)
+  "prometheus" (dict "name" "PROMETHEUS_URL" "value" (include "ai-stack.prometheusUrl" $))
+  "loki" (dict "name" "LOKI_URL" "value" (include "ai-stack.lokiUrl" $))
+  "jaeger" (dict "name" "JAEGER_URL" "value" (include "ai-stack.jaegerUrl" $))
   "drain3" (dict "name" "TRIAGE_SERVICE_URL" "value" (printf "http://%s-triage:%v" $fullname $.Values.triageService.port))
   "rca-history" (dict "name" "RCA_DB_PATH" "value" $.Values.rcaHistory.dbPath)
 -}}

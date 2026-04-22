@@ -81,11 +81,19 @@ ollama:
       cpu: "3"
       memory: 6Gi
 
-# External service endpoints (monitoring VM)
+# External service endpoints (monitoring VM).
+# Prefer setting `monitoring.host` (a single IP or hostname); the chart
+# composes the URLs from it and standard ports, so you don't have to
+# remember three separate flags on helm install. Explicit per-URL values
+# still win if set.
 monitoring:
-  prometheusUrl: "http://MONITORING_VM_IP:9090"
-  lokiUrl: "http://MONITORING_VM_IP:3100"
-  jaegerUrl: "http://MONITORING_VM_IP:16686"
+  host: ""                     # e.g. 10.0.1.68 (monitoring VM private IP)
+  prometheusUrl: ""            # takes precedence over host-based composition
+  lokiUrl: ""
+  jaegerUrl: ""
+  prometheusPort: 9090
+  lokiPort: 3100
+  jaegerPort: 16686
 
 # SMTP for escalation emails
 smtp:
@@ -96,8 +104,9 @@ smtp:
   from: ""
   notificationEmail: ""
 
-# Grafana dashboard URL for email links
-grafanaDashboardUrl: "http://MONITORING_VM_IP:3000"
+# Grafana dashboard URL for email links. Leave empty to auto-compose from
+# monitoring.host (uses :3000 — the default Grafana port).
+grafanaDashboardUrl: ""
 
 # Drain3 config
 drain3:

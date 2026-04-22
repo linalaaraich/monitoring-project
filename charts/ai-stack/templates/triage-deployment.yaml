@@ -57,9 +57,9 @@ spec:
             - name: RCA_HISTORY_MCP_URL
               value: "http://{{ include "ai-stack.fullname" . }}-mcp-rca-history:{{ .Values.mcpServers.rcaHistory.port }}"
             - name: LOKI_API_URL
-              value: {{ .Values.monitoring.lokiUrl | quote }}
+              value: {{ include "ai-stack.lokiUrl" . | quote }}
             - name: GRAFANA_DASHBOARD_URL
-              value: {{ .Values.grafanaDashboardUrl | quote }}
+              value: {{ include "ai-stack.grafanaDashboardUrl" . | quote }}
             - name: DRAIN3_STATE_DIR
               value: {{ .Values.drain3.stateDir | quote }}
             - name: DRAIN3_POLL_INTERVAL
