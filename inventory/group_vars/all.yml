@@ -2,7 +2,10 @@ stack_dir: /opt/stack
 admin_email: laaraichlina@gmail.com
 ssh_port: 22
 
-firewall_enabled: true
+# UFW on the VMs is redundant with AWS security groups and its hardcoded
+# 192.168.127.0/24 rules don't apply to AWS VPC (10.0.0.0/16). Leave false
+# for AWS deploys; set true only for on-prem VM deploys.
+firewall_enabled: false
 ansible_control_ip: 192.168.127.20
 
 # VM IPs — update from Terraform outputs for AWS deployment
