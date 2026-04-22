@@ -1977,7 +1977,7 @@
     },
     {
       "id": 9006,
-      "title": "DB • Connection usage duration (P95, ms)",
+      "title": "DB • Connection usage duration (max + mean, ms)",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -1991,13 +1991,14 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(hikaricp_connections_usage_seconds_max{pod=~\"spring-boot.*\"}[5m])) by (le)) * 1000 or (rate(hikaricp_connections_usage_seconds_sum{pod=~\"spring-boot.*\"}[5m]) / clamp_min(rate(hikaricp_connections_usage_seconds_count{pod=~\"spring-boot.*\"}[5m]),1)) * 1000",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "legendFormat": "{{pod}}"
+          "expr": "max by(pool) (hikaricp_connections_usage_seconds_max{pod=~\"spring-boot.*\"}) * 1000",
+          "legendFormat": "{{pool}} max",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by(pool) (rate(hikaricp_connections_usage_seconds_sum{pod=~\"spring-boot.*\"}[5m])) / clamp_min(sum by(pool) (rate(hikaricp_connections_usage_seconds_count{pod=~\"spring-boot.*\"}[5m])), 1) * 1000",
+          "legendFormat": "{{pool}} mean",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -2015,7 +2016,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Spring Boot HikariCP connection-usage timer. Micrometer exposes count/sum/max (no histogram buckets), so P95 isn't computable; we show max-per-scrape and rolling mean instead."
     }
   ],
   "preload": false,
