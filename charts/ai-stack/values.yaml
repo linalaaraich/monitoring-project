@@ -42,10 +42,12 @@ ollama:
   image: ollama/ollama
   tag: latest
   port: 11434
-  model: "llama3.1:8b"
-  storage: 20Gi
+  # CPU inference on a 3B model. For GPU nodes, flip gpu.enabled=true and bump
+  # model to llama3.1:8b. ~2 GB resident on CPU; 10-20s per response at 4 vCPU.
+  model: "llama3.2:3b"
+  storage: 10Gi
   gpu:
-    enabled: true
+    enabled: false
     count: 1
   # Set to false if running on same node, true if on separate GPU node
   separateNode: false
@@ -53,11 +55,11 @@ ollama:
   tolerations: []
   resources:
     requests:
-      cpu: "2"
-      memory: 8Gi
+      cpu: "1"
+      memory: 3Gi
     limits:
-      cpu: "4"
-      memory: 16Gi
+      cpu: "3"
+      memory: 6Gi
 
 # External service endpoints (monitoring VM)
 monitoring:

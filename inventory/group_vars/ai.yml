@@ -6,7 +6,9 @@ triage_service_data_dir: /var/lib/triage-service
 
 # Ollama (self-hosted LLM runtime)
 ollama_port: 11434
-ollama_model: "llama3.1:8b"
+# CPU inference on a 3B model for quota-restricted account (no GPU).
+# Flip back to "llama3.1:8b" once GPU (L-DB2E81BA) quota is granted.
+ollama_model: "llama3.2:3b"
 ollama_data_dir: /var/lib/ollama
 
 # MCP Bridge Servers
@@ -30,5 +32,6 @@ triage_smtp_password: "{{ lookup('env', 'GRAFANA_SMTP_PASSWORD') }}"
 triage_smtp_from: "laaraichlina@gmail.com"
 triage_notification_email: "laaraichlina@gmail.com"
 
-# NVIDIA GPU runtime for Ollama
-nvidia_runtime_enabled: true
+# NVIDIA GPU runtime for Ollama. Disabled while account G+VT vCPU quota = 0
+# (2026-04-22). Flip back to true after quota grant + g4dn instance provisioned.
+nvidia_runtime_enabled: false
