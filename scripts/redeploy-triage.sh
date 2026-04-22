@@ -64,15 +64,43 @@ tar -C "$(dirname "$CHART_DIR")" -czf "$CHART_TARBALL" "$(basename "$CHART_DIR")
 scp -o StrictHostKeyChecking=no -i "$SSH_KEY" "$CHART_TARBALL" "$K3S_HOST:/tmp/ai-stack-chart.tgz"
 rm -f "$CHART_TARBALL"
 
-echo "=== helm upgrade (--reuse-values) ==="
+echo "=== helm upgrade (--reuse-values + chart defaults for tunables) ==="
+# --reuse-values keeps user-supplied values (monitoring.host, smtp.*) safe
+# through restarts. BUT it also freezes chart-default values at their
+# install-time versions — so bumping e.g. triageService.lokiLogLimit in
+# values.yaml does NOT propagate on a plain --reuse-values upgrade. We
+# explicitly re-apply the chart defaults for tunables we expect to bump
+# via values.yaml; user-supplied overrides of these still win via EXTRA_SET.
+#
+# Additional overrides can be passed via EXTRA_SET, e.g.:
+#   EXTRA_SET="--set ollama.model=llama3.1:8b" ./redeploy-triage.sh
+EXTRA_SET="${EXTRA_SET:-}"
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$K3S_HOST" bash -se <<EOF
   set -euo pipefail
   rm -rf /tmp/ai-stack-chart && mkdir -p /tmp/ai-stack-chart
   tar -xzf /tmp/ai-stack-chart.tgz -C /tmp/ai-stack-chart
+  CHART=/tmp/ai-stack-chart/ai-stack
+  # Read current chart-default tunables from the freshly-synced values.yaml,
+  # then re-apply them as --set so bumps to defaults actually take effect
+  # while --reuse-values protects user-supplied values.
+  LOKI_LIMIT=\$(grep -E '^\\s+lokiLogLimit:' \$CHART/values.yaml | awk '{print \$2}')
+  JAEGER_LIMIT=\$(grep -E '^\\s+jaegerTraceLimit:' \$CHART/values.yaml | awk '{print \$2}')
+  PROM_RANGE=\$(grep -E '^\\s+prometheusRangeMinutes:' \$CHART/values.yaml | awk '{print \$2}')
+  OLLAMA_REQ=\$(grep -E '^\\s+ollamaRequestTimeout:' \$CHART/values.yaml | awk '{print \$2}')
+  PIPELINE_TO=\$(grep -E '^\\s+pipelineTimeout:' \$CHART/values.yaml | awk '{print \$2}')
+
+  echo "Applying chart tunables: lokiLogLimit=\$LOKI_LIMIT jaegerTraceLimit=\$JAEGER_LIMIT prometheusRangeMinutes=\$PROM_RANGE ollamaRequestTimeout=\$OLLAMA_REQ pipelineTimeout=\$PIPELINE_TO"
+
   sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade ai-stack \
-    /tmp/ai-stack-chart/ai-stack/ -n ai \
+    \$CHART -n ai \
     --reuse-values \
-    --set imageTag=$IMAGE_TAG
+    --set imageTag=$IMAGE_TAG \
+    --set triageService.lokiLogLimit=\$LOKI_LIMIT \
+    --set triageService.jaegerTraceLimit=\$JAEGER_LIMIT \
+    --set triageService.prometheusRangeMinutes=\$PROM_RANGE \
+    --set triageService.ollamaRequestTimeout=\$OLLAMA_REQ \
+    --set triageService.pipelineTimeout=\$PIPELINE_TO \
+    $EXTRA_SET
   sudo k3s kubectl -n ai rollout status deploy/ai-stack-triage --timeout=180s
   sudo k3s kubectl -n ai get pods -l app.kubernetes.io/component=triage-service
   sudo rm -f /tmp/ai-stack-chart.tgz
