@@ -5,7 +5,11 @@ metadata:
   labels:
     {{- include "spring-boot.labels" . | nindent 4 }}
 data:
-  spring.datasource.url: {{ .Values.database.url | quote }}
+  # Compose the JDBC URL from database.host/port/name unless database.url
+  # was explicitly set. Lets operators pass `--set database.host=<rds>`
+  # without remembering the jdbc:mysql:// prefix, while still allowing an
+  # explicit override for edge cases (e.g. TLS, extra params).
+  spring.datasource.url: {{ if .Values.database.url }}{{ .Values.database.url | quote }}{{ else }}{{ printf "jdbc:mysql://%s:%v/%s" .Values.database.host (.Values.database.port | default 3306) (.Values.database.name | default "app_db") | quote }}{{ end }}
   server.port: {{ .Values.service.targetPort | quote }}
   management.endpoints.web.exposure.include: "health,info,prometheus,metrics"
   management.endpoint.health.show-details: "always"

@@ -21,9 +21,15 @@ resources:
     cpu: "1"
     memory: 1Gi
 
-# RDS connection (from Terraform outputs)
+# RDS connection (from Terraform outputs).
+# Prefer passing `host` via --set on install; the chart composes the JDBC
+# URL from host/port/name so the caller doesn't have to remember the
+# jdbc:mysql:// prefix. `url` still wins if explicitly set.
 database:
-  url: "jdbc:mysql://RDS_ENDPOINT:3306/app_db"
+  host: ""       # e.g. observability-rca-mysql.xxx.us-east-1.rds.amazonaws.com
+  port: 3306
+  name: "app_db"
+  url: ""        # takes precedence over host/port/name when non-empty
   username: "appuser"
   password: ""
 
