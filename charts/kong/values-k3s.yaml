@@ -17,6 +17,14 @@ env:
   database: "off"
   # Upstream chart mounts dblessConfig.configMap at /kong_dbless/, not /kong/config/
   declarative_config: /kong_dbless/kong.yml
+  # Enable Kong's internal tracer. Without this, the opentelemetry plugin
+  # has nothing to export regardless of its own config. Default is "off"
+  # → zero spans emitted → Jaeger never sees kong-gateway. Values are a
+  # comma-separated list: "all" enables every instrumentation (router,
+  # balancer, plugin_rewrite, plugin_access, etc.). Sample 100% of traces
+  # for the demo; drop to 0.1–0.01 in production.
+  tracing_instrumentations: all
+  tracing_sampling_rate: 1.0
 
 dblessConfig:
   configMap: kong-config

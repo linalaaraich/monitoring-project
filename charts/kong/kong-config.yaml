@@ -18,12 +18,7 @@ data:
             paths:
               - /actuator
             strip_path: false
-        plugins:
-          - name: opentelemetry
-            config:
-              endpoint: "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
-              resource_attributes:
-                service.name: kong-gateway
+        # (per-service OTel plugin removed — now at global level, see below)
       - name: frontend
         # Points at Spring Boot because the React frontend is bundled into the
         # Spring container (served at /). When CloudFront is enabled, replace
@@ -46,3 +41,15 @@ data:
           latency_metrics: true
           bandwidth_metrics: true
           upstream_health_metrics: true
+      # OTel tracing at the GLOBAL level — every matched request gets a span
+      # regardless of which service/route handled it. Ships OTLP/HTTP to the
+      # in-cluster DaemonSet, which forwards to Jaeger on the monitoring VM.
+      - name: opentelemetry
+        config:
+          traces_endpoint: "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
+          sampling_rate: 1.0
+          batch_span_count: 10
+          batch_flush_delay: 1
+          resource_attributes:
+            service.name: kong-gateway
+            service.version: "3.9"
