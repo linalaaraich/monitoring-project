@@ -1,0 +1,79 @@
+{
+  "groups": [
+    {
+      "name": "demo-alerts",
+      "folder": "demo-scenario",
+      "interval": "30s",
+      "rules": [
+        {
+          "uid": "demo-backend-5xx",
+          "title": "Backend 5xx rate above 5%",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {"from": 300, "to": 0},
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[2m])) / clamp_min(sum(rate(http_server_requests_seconds_count[2m])), 1)",
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [{"evaluator": {"params": [0.05], "type": "gt"}, "type": "query"}],
+                "expression": "A",
+                "type": "threshold",
+                "refId": "C"
+              }
+            }
+          ],
+          "noDataState": "NoData",
+          "execErrState": "Alerting",
+          "for": "1m",
+          "annotations": {
+            "summary": "Spring Boot 5xx error ratio exceeds 5%",
+            "description": "Triggered by demo-scenario/inject-failure.sh backend-down"
+          },
+          "labels": {"severity": "critical", "service": "spring-boot", "demo": "true"}
+        },
+        {
+          "uid": "demo-backend-p95",
+          "title": "Backend p95 latency above 1s",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {"from": 300, "to": 0},
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[2m])) by (le))",
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [{"evaluator": {"params": [1.0], "type": "gt"}, "type": "query"}],
+                "expression": "A",
+                "type": "threshold",
+                "refId": "C"
+              }
+            }
+          ],
+          "noDataState": "NoData",
+          "execErrState": "Alerting",
+          "for": "2m",
+          "annotations": {
+            "summary": "Spring Boot p95 latency exceeds 1s",
+            "description": "Triggered by demo-scenario/inject-failure.sh slow-query"
+          },
+          "labels": {"severity": "warning", "service": "spring-boot", "demo": "true"}
+        }
+      ]
+    }
+  ]
+}
