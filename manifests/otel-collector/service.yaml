@@ -1,0 +1,39 @@
+---
+# Headless-enough Service so pod DNS works for in-cluster clients.
+# Spring Boot's OTel Java Agent resolves
+#   otel-collector.observability.svc.cluster.local:4317
+# before sending OTLP traces. Without this Service, DNS returns NXDOMAIN
+# and every export fails ("UnknownHostException").
+#
+# The Collector itself runs as a DaemonSet on hostPorts 4317/4318, but
+# pods should use the cluster DNS — that's more portable and doesn't
+# hard-code the node IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: observability-platform
+spec:
+  selector:
+    app.kubernetes.io/name: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: metrics
+      port: 8888
+      targetPort: 8888
+      protocol: TCP
+    - name: health
+      port: 13133
+      targetPort: 13133
+      protocol: TCP

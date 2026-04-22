@@ -22,13 +22,21 @@ data:
         include_file_path: true
         include_file_name: false
         operators:
-          # Parse CRI-O / containerd log format
+          # Parse CRI-O / containerd log format.
           - type: regex_parser
             id: container-parser
             regex: '^(?P<time>[^ ]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
-            timestamp:
-              parse_from: attributes.time
-              layout: '%Y-%m-%dT%H:%M:%S.%LZ'
+            # Skip timestamp parsing — layouts with timezone offsets are finicky
+            # across stanza versions and we'd rather use ingest time than drop logs.
+          # Extract namespace / pod_name / container_name from the file path
+          # (/var/log/pods/<ns>_<pod>_<uid>/<container>/<num>.log). We set these
+          # as RESOURCE attributes so the Loki exporter can promote them to
+          # stream labels via the loki.resource.labels hint.
+          - type: regex_parser
+            id: k8s-metadata-from-path
+            parse_from: attributes["log.file.path"]
+            regex: '^/var/log/pods/(?P<k8s_namespace_name>[^_]+)_(?P<k8s_pod_name>[^_]+)_(?P<k8s_pod_uid>[^/]+)/(?P<k8s_container_name>[^/]+)/'
+            parse_to: resource
           # Extract trace_id from log body if present
           - type: regex_parser
             id: trace-id-parser
@@ -84,6 +92,18 @@ data:
         send_batch_size: 1024
         timeout: 5s
 
+      # Promote K8s resource attributes to Loki labels so Grafana queries
+      # like {namespace="app"} work. Without this, the Loki exporter only
+      # produces a single "unknown_service" stream.
+      attributes/loki-labels:
+        actions:
+          - action: insert
+            key: loki.resource.labels
+            # These keys come from the filelog regex parser (resource attrs).
+            # Use the same naming here (underscore form); Loki exporter looks
+            # up resource attrs by this exact key.
+            value: k8s_namespace_name, k8s_pod_name, k8s_container_name, k8s_node_name, k8s_deployment_name
+
     exporters:
       # Forward traces to monitoring VM OTel Collector -> Jaeger
       otlp/traces:
@@ -108,6 +128,12 @@ data:
 
     service:
       extensions: [health_check]
+      # Expose the Collector's own metrics on :8888 so Prometheus can scrape
+      # via kubernetes_sd_configs. Simple legacy syntax (still supported in
+      # v0.120.x) — the new readers-based syntax is finicky.
+      telemetry:
+        metrics:
+          address: '0.0.0.0:8888'
       pipelines:
         traces:
           receivers: [otlp]
@@ -115,5 +141,5 @@ data:
           exporters: [otlp/traces]
         logs:
           receivers: [filelog, otlp]
-          processors: [k8sattributes, resource, batch]
+          processors: [k8sattributes, resource, attributes/loki-labels, batch]
           exporters: [loki]

@@ -27,11 +27,15 @@ database:
   username: "appuser"
   password: ""
 
-# OTel Java Agent
+# OTel Java Agent.
+# Use the same name across all three pillars (Loki service_name, Prometheus
+# app label, Jaeger service) so alerts with a single "service" value can be
+# looked up in every system. Previously this was "react-springboot-app"
+# which didn't match the alert labels — broke MCP context fan-out.
 otel:
   enabled: true
   agentVersion: "2.11.0"
-  serviceName: "react-springboot-app"
+  serviceName: "spring-boot"
   exporterEndpoint: "http://otel-collector.observability.svc.cluster.local:4317"
 
 # Prometheus scraping annotations
