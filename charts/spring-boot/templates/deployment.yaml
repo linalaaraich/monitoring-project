@@ -94,6 +94,10 @@ spec:
               value: "true"
             - name: LOGGING_PATTERN_LEVEL
               value: "%5p [trace_id=%X{trace_id:-},span_id=%X{span_id:-}]"
+            # Demo-level log noise so every HTTP request produces a log line
+            # carrying its trace_id. Flip to INFO for production.
+            - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB
+              value: {{ .Values.logging.webLogLevel | default "INFO" | quote }}
             {{- end }}
           {{- if .Values.otel.enabled }}
           volumeMounts:

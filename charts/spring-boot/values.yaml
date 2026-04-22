@@ -38,6 +38,14 @@ otel:
   serviceName: "spring-boot"
   exporterEndpoint: "http://otel-collector.observability.svc.cluster.local:4317"
 
+# Spring Boot's default log level is INFO which emits very few lines under
+# steady traffic — nothing meaningful per request. For a demo where we want
+# to show log→trace click-through on every request, bump the Spring Web
+# logger to DEBUG (Spring + Tomcat log per request, all lines carry
+# trace_id via LOGGING_PATTERN_LEVEL). Set to "INFO" for production.
+logging:
+  webLogLevel: "DEBUG"
+
 # Prometheus scraping annotations
 prometheus:
   scrape: true
