@@ -36,6 +36,10 @@ spec:
               value: "http://{{ include "ai-stack.fullname" . }}-ollama:{{ .Values.ollama.port }}"
             - name: OLLAMA_MODEL
               value: {{ .Values.ollama.model | quote }}
+            - name: OLLAMA_REQUEST_TIMEOUT
+              value: {{ .Values.triageService.ollamaRequestTimeout | default 180 | quote }}
+            - name: PIPELINE_TIMEOUT
+              value: {{ .Values.triageService.pipelineTimeout | default 600 | quote }}
             - name: PROMETHEUS_MCP_URL
               value: "http://{{ include "ai-stack.fullname" . }}-mcp-prometheus:{{ .Values.mcpServers.prometheus.port }}"
             - name: LOKI_MCP_URL

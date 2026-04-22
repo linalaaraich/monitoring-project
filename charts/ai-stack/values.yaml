@@ -6,6 +6,12 @@ imageTag: "latest"
 triageService:
   image: cires/triage-service
   port: 8090
+  # CPU inference on llama3.2:3b takes 60–180s per call under a real-sized
+  # prompt. Ollama per-request timeout must exceed that; pipeline timeout
+  # must accommodate retries. Defaults assume CPU Ollama on t3.xlarge.
+  # For GPU nodes, these can be dropped back to 30 / 300.
+  ollamaRequestTimeout: 180
+  pipelineTimeout: 600
   resources:
     requests:
       cpu: 250m

@@ -91,9 +91,14 @@ spec:
               mountPath: /otel-agent
               readOnly: true
           {{- end }}
+          # This Spring Boot build (react-springboot-mysql tutorial app)
+          # doesn't expose /actuator/health/{liveness,readiness} even with
+          # probes.enabled=true — fall back to /actuator/health, which is
+          # fully composed (db + diskSpace + ping). Same semantics for our
+          # purposes since DB connectivity is the main thing we care about.
           livenessProbe:
             httpGet:
-              path: /actuator/health/liveness
+              path: /actuator/health
               port: http
             initialDelaySeconds: 60
             periodSeconds: 15
@@ -101,7 +106,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /actuator/health/readiness
+              path: /actuator/health
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10

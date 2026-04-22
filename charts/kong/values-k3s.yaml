@@ -5,9 +5,18 @@ image:
   repository: kong
   tag: "3.9"
 
+# Pure DB-less declarative mode. The upstream chart only mounts
+# dblessConfig.configMap when the ingress-controller sidecar is disabled —
+# otherwise Kong expects its admin API to be driven by KIC, conflicts with
+# our declarative /kong/config/kong.yml file, and the ingress-controller
+# container loops on "dial tcp [::1]:8444: connect: connection refused".
+ingressController:
+  enabled: false
+
 env:
   database: "off"
-  declarative_config: /kong/config/kong.yml
+  # Upstream chart mounts dblessConfig.configMap at /kong_dbless/, not /kong/config/
+  declarative_config: /kong_dbless/kong.yml
 
 dblessConfig:
   configMap: kong-config

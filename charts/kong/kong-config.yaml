@@ -26,7 +26,10 @@ data:
                 service.name: kong-gateway
           - name: prometheus
       - name: frontend
-        url: https://CLOUDFRONT_DOMAIN
+        # Points at Spring Boot because the React frontend is bundled into the
+        # Spring container (served at /). When CloudFront is enabled, replace
+        # this URL with the CloudFront domain.
+        url: http://spring-boot.app.svc.cluster.local:80
         routes:
           - name: frontend-route
             paths:
