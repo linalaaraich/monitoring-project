@@ -1231,7 +1231,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "sum(rate(kong_http_requests_total{code=~\"5..\"}[5m])) by (service)",
+          "expr": "sum(rate(kong_http_requests_total{code=~\"5..\"}[5m])) by (service) or vector(0)",
           "legendFormat": "Kong 5xx: {{ service }}",
           "refId": "A"
         },
@@ -1647,7 +1647,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "{service_name=~\".+\"} | json | traceid != `` | line_format \"{{.body}}\"",
+          "expr": "{service_name=~\".+\"} | json | trace_id != `` | line_format \"{{.body}}\"",
           "legendFormat": "",
           "refId": "A"
         }

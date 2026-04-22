@@ -472,7 +472,7 @@
           "refId": "B"
         },
         {
-          "expr": "sum(rate(otelcol_processor_dropped_spans_total[5m]))",
+          "expr": "sum(rate(otelcol_processor_dropped_spans_total[5m])) or vector(0)",
           "legendFormat": "Dropped",
           "refId": "C"
         },
@@ -670,7 +670,7 @@
           "refId": "A"
         }
       ],
-      "title": "Batch Processor — Batch Send Size",
+      "title": "Batch Processor \u2014 Batch Send Size",
       "type": "timeseries"
     },
     {
@@ -727,7 +727,7 @@
           "refId": "A"
         }
       ],
-      "title": "Active Alerts — OTel Collector",
+      "title": "Active Alerts \u2014 OTel Collector",
       "type": "table"
     }
   ],
