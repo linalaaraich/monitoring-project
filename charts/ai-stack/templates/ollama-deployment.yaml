@@ -35,6 +35,13 @@ spec:
             - name: http
               containerPort: {{ .Values.ollama.port }}
               protocol: TCP
+          env:
+            # Keep the model resident in memory between calls. Default is 5
+            # minutes — way too short for a real alert cadence: every triage
+            # call would pay a cold-load penalty (~10-20s on CPU). At 6h the
+            # model stays warm for the entire demo + any burst of alerts.
+            - name: OLLAMA_KEEP_ALIVE
+              value: {{ .Values.ollama.keepAlive | default "6h" | quote }}
           lifecycle:
             postStart:
               exec:

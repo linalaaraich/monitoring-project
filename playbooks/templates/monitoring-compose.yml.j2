@@ -6,7 +6,10 @@ services:
     ports:
       - "{{ prometheus_port }}:9090"
     volumes:
-      - {{ prometheus_config_dir }}/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Mount the whole directory (not just prometheus.yml) so bearer_token_file
+      # and tls_config.ca_file references can read sibling files like k3s-token
+      # and k3s-ca.crt. The k8s-manifests playbook drops those files here.
+      - {{ prometheus_config_dir }}:/etc/prometheus:ro
       - {{ prometheus_data_dir }}:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'

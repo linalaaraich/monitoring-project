@@ -404,7 +404,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"net-kong\"}",
+          "expr": "up{app_kubernetes_io_name=\"kong\"}",
           "refId": "A"
         }
       ],
@@ -477,7 +477,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"app-spring-actuator\"}",
+          "expr": "up{app_kubernetes_io_name=\"spring-boot\"}",
           "refId": "A"
         }
       ],
@@ -623,7 +623,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"app-mysql\"}",
+          "expr": "up{app_kubernetes_io_name=\"spring-boot\"}",
           "refId": "A"
         }
       ],
@@ -1208,7 +1208,7 @@
           "refId": "A"
         },
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"app-spring-actuator\"}[5m])) or vector(0)",
+          "expr": "sum(rate(http_server_requests_seconds_count{pod=~\"spring-boot.*\"}[5m])) or vector(0)",
           "legendFormat": "Spring Boot",
           "refId": "B"
         }
@@ -1309,7 +1309,7 @@
           "refId": "A"
         },
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"app-spring-actuator\", status=~\"5..\"}[5m])) or vector(0)",
+          "expr": "sum(rate(http_server_requests_seconds_count{pod=~\"spring-boot.*\", status=~\"5..\"}[5m])) or vector(0)",
           "legendFormat": "Spring Boot 5xx",
           "refId": "B"
         }
@@ -1409,7 +1409,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"app-spring-actuator\"}[5m])) by (le)) * 1000",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{pod=~\"spring-boot.*\"}[5m])) by (le)) * 1000",
           "legendFormat": "Spring Boot P95",
           "refId": "A"
         },
@@ -1527,12 +1527,12 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "mysql_global_status_threads_connected{job=\"app-mysql\"}",
+          "expr": "hikaricp_connections_active{pod=~\"spring-boot.*\"} or vector(0)",
           "legendFormat": "Active Connections",
           "refId": "A"
         },
         {
-          "expr": "rate(mysql_global_status_queries{job=\"app-mysql\"}[5m])",
+          "expr": "rate(http_server_requests_seconds_count{pod=~\"spring-boot.*\", uri!~\"/actuator.*\"}[5m])",
           "legendFormat": "Queries/s",
           "refId": "B"
         }

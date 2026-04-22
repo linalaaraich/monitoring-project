@@ -42,3 +42,11 @@ resources:
   limits:
     cpu: "1"
     memory: 512Mi
+
+# Tell Prometheus kubernetes_sd_configs to scrape Kong's admin /metrics.
+# Kong's Prometheus plugin (set in kong.yml ConfigMap) exposes metrics on the
+# admin port 8001. Without these annotations the k8s-SD job skips the pod.
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "8001"

@@ -92,16 +92,44 @@
       delay: 5
       tags: [prometheus]
 
-    - name: Decode and save Prometheus token locally
-      shell: |
-        echo '{{ prom_token_b64.stdout }}' | base64 -d > /tmp/k3s-prometheus-token
+    - name: Wait for ServiceAccount CA cert
+      command: kubectl get secret prometheus-scraper-token -n observability -o jsonpath='{.data.ca\.crt}'
+      register: prom_ca_b64
+      until: prom_ca_b64.stdout != ""
+      retries: 10
+      delay: 5
       tags: [prometheus]
 
-    - name: Show next step for Prometheus token
-      debug:
-        msg: >
-          Prometheus SA token saved to /tmp/k3s-prometheus-token.
-          Copy it to the monitoring VM:
-            scp /tmp/k3s-prometheus-token deploy@{{ monitoring_vm_ip }}:/etc/prometheus/k3s-token
-          Then set k3s_sd_enabled=true in monitoring.yml and re-run the monitoring playbook.
+    - name: Decode token + CA locally
+      shell: |
+        echo '{{ prom_token_b64.stdout }}' | base64 -d > /tmp/k3s-prometheus-token
+        echo '{{ prom_ca_b64.stdout }}'   | base64 -d > /tmp/k3s-prometheus-ca.crt
+      tags: [prometheus]
+
+    # Ship the token + CA to the monitoring VM so the Prometheus scrape
+    # config can reference bearer_token_file: /etc/prometheus/k3s-token.
+    # This closes the loop: operator runs `ansible-playbook site.yml` once,
+    # and kubernetes_sd_configs starts scraping without any manual scp.
+    - name: Ship k3s SA token + CA to monitoring VM
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      become: true
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - { src: /tmp/k3s-prometheus-token, dest: /etc/prometheus/k3s-token }
+        - { src: /tmp/k3s-prometheus-ca.crt, dest: /etc/prometheus/k3s-ca.crt }
+      tags: [prometheus]
+
+    - name: Reload Prometheus (web.enable-lifecycle) so it picks up the new token + cluster_sd job
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      become: true
+      uri:
+        url: "http://localhost:{{ prometheus_port | default(9090) }}/-/reload"
+        method: POST
+        status_code: [200, 204]
+      ignore_errors: true
       tags: [prometheus]

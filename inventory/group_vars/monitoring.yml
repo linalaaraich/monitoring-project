@@ -9,8 +9,12 @@ grafana_smtp_password: "{{ lookup('env', 'GRAFANA_SMTP_PASSWORD') }}"
 grafana_smtp_from: "laaraichlina@gmail.com"
 grafana_contact_email: "laaraichlina@gmail.com"
 
-# Triage service webhook — Grafana Alerting sends all alerts here
-triage_service_webhook_url: "http://{{ ai_vm_ip }}:8090/webhook/grafana"
+# Triage service webhook — Grafana Alerting sends all alerts here.
+# Triage is now a ClusterIP Service inside k3s; Grafana reaches it via the
+# Kong NodePort route (/triage is proxied through Kong, see kong-config.yaml).
+# If Kong isn't exposing /triage yet, fall back to the cluster NodePort or
+# an SSH-tunneled localhost:8090.
+triage_service_webhook_url: "http://{{ k3s_host_ip }}:30080/triage/webhook/grafana"
 
 loki_port: 3100
 jaeger_port_ui: 16686
@@ -24,31 +28,9 @@ grafana_datasources:
 prometheus_scrape_interval: "15s"
 prometheus_retention_days: 15
 prometheus_targets:
-  # Application VM targets
-  - job: "app-spring-actuator"
-    host: "{{ network_vm_ip }}"
-    port: "8000"
-    metrics_path: "/actuator/prometheus"
-  - job: "app-cadvisor"
-    host: "{{ application_vm_ip }}"
-    port: "{{ cadvisor_port }}"
-  - job: "app-node-exporter"
-    host: "{{ application_vm_ip }}"
-    port: "{{ node_port }}"
-
-  # Network VM targets
-  - job: "net-node-exporter"
-    host: "{{ network_vm_ip }}"
-    port: "{{ node_port }}"
-  - job: "net-kong"
-    host: "{{ network_vm_ip }}"
-    port: "8001"
-    metrics_path: "/metrics"
-  - job: "net-cadvisor"
-    host: "{{ network_vm_ip }}"
-    port: "{{ cadvisor_port }}"
-
-  # Monitoring VM targets
+  # Monitoring VM — static targets (the observability stack itself).
+  # App / network / AI workloads have moved into k3s — they are discovered
+  # via kubernetes_sd_configs instead of listed here. See k3s_sd_enabled.
   - job: "mon-cadvisor"
     host: "{{ monitoring_vm_ip }}"
     port: "{{ cadvisor_port }}"
@@ -71,22 +53,13 @@ prometheus_targets:
     host: "{{ monitoring_vm_ip }}"
     port: "8888"
 
-  # AI/LLM VM targets
-  - job: "ai-triage-service"
-    host: "{{ ai_vm_ip }}"
-    port: "8090"
-  - job: "ai-node-exporter"
-    host: "{{ ai_vm_ip }}"
-    port: "{{ node_port }}"
-  - job: "ai-cadvisor"
-    host: "{{ ai_vm_ip }}"
-    port: "{{ cadvisor_port }}"
-
 loki_retention_days: 7
 
-# --- Kubernetes service discovery (set to true after k3s migration) ---
-# When enabled, Prometheus adds kubernetes_sd_configs scrape jobs
-# and Grafana alert rules use pod-based selectors
-k3s_sd_enabled: false
+# --- Kubernetes service discovery ---
+# Default ON: Prometheus uses kubernetes_sd_configs to discover every pod
+# annotated with `prometheus.io/scrape: "true"` in the k3s cluster, routed
+# through the API server proxy (no pod-network reachability required).
+# Requires: /etc/prometheus/k3s-token and /etc/prometheus/k3s-ca.crt already
+# present on the monitoring VM — the k8s-manifests.yml playbook ships them.
+k3s_sd_enabled: true
 # k3s_host_ip: set in group_vars/all.yml or group_vars/k3s_cluster.yml
-# k3s_bearer_token: set via Ansible Vault (extracted from prometheus-scraper SA)

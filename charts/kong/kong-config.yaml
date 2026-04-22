@@ -24,7 +24,6 @@ data:
               endpoint: "http://otel-collector.observability.svc.cluster.local:4318/v1/traces"
               resource_attributes:
                 service.name: kong-gateway
-          - name: prometheus
       - name: frontend
         # Points at Spring Boot because the React frontend is bundled into the
         # Spring container (served at /). When CloudFront is enabled, replace
@@ -35,3 +34,15 @@ data:
             paths:
               - /
             strip_path: false
+    # Plugins at the top level are applied globally (to every route/service).
+    # Prometheus plugin enabled globally so Kong emits per-status-code,
+    # per-latency, and bandwidth metrics — not just base nginx counters.
+    # See: https://docs.konghq.com/hub/kong-inc/prometheus/
+    plugins:
+      - name: prometheus
+        config:
+          per_consumer: false
+          status_code_metrics: true
+          latency_metrics: true
+          bandwidth_metrics: true
+          upstream_health_metrics: true
