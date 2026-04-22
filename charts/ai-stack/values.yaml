@@ -1,7 +1,7 @@
 nameOverride: ""
 fullnameOverride: ""
 
-imageTag: "2026-04-22b"
+imageTag: "2026-04-22c"
 
 triageService:
   image: cires/triage-service
