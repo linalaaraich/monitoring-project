@@ -1,10 +1,11 @@
-# Multi-stage build for mukundmadhav/react-springboot-mysql
-# Stage 1: Build the Spring Boot JAR (includes bundled React frontend)
+# Multi-stage build for the Spring Boot demo app.
+# Kept symmetric with /root/react-springboot-mysql/Dockerfile (hand-maintained
+# copy used when building via the k3s_images role).
 FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /build
 RUN git clone https://github.com/mukundmadhav/react-springboot-mysql.git .
 
-# Inject actuator + Prometheus metrics dependencies (not in upstream pom.xml)
+# Inject actuator + Prometheus dependencies (the upstream tutorial pom doesn't ship them).
 RUN sed -i '/<\/dependencies>/i \
     <dependency>\
         <groupId>org.springframework.boot<\/groupId>\
@@ -15,18 +16,31 @@ RUN sed -i '/<\/dependencies>/i \
         <artifactId>micrometer-registry-prometheus<\/artifactId>\
     <\/dependency>' pom.xml
 
-# Expose actuator endpoints for monitoring
+# Spring Boot config baked in so:
+#  - actuator exposes /health, /info, /prometheus, /metrics
+#  - /actuator/health includes DB + probe details
+#  - Micrometer emits histogram _bucket series (required for
+#    histogram_quantile P50/P95/P99 in Grafana — without this it only
+#    emits _count/_sum/_max and P-x queries return empty)
 RUN mkdir -p src/main/resources && \
-    echo 'management.endpoints.web.exposure.include=health,info,prometheus,metrics' >> src/main/resources/application.properties && \
-    echo 'management.endpoint.health.show-details=always' >> src/main/resources/application.properties
+    { \
+      echo 'management.endpoints.web.exposure.include=health,info,prometheus,metrics'; \
+      echo 'management.endpoint.health.show-details=always'; \
+      echo 'management.endpoint.health.probes.enabled=true'; \
+      echo 'management.health.livenessstate.enabled=true'; \
+      echo 'management.health.readinessstate.enabled=true'; \
+      echo ''; \
+      echo 'management.metrics.distribution.percentiles-histogram.http.server.requests=true'; \
+      echo 'management.metrics.distribution.slo.http.server.requests=50ms,100ms,250ms,500ms,1s,2s,5s,10s'; \
+      echo 'management.metrics.distribution.percentiles.http.server.requests=0.5,0.9,0.95,0.99'; \
+    } >> src/main/resources/application.properties
 
-RUN mvn clean package -DskipTests
+RUN mvn clean package -DskipTests -B
 
-# Stage 2: Runtime image with OTel agent support
+# Stage 2: slim JRE runtime. The OTel Java agent is injected via an
+# initContainer at deploy time (see charts/spring-boot/templates/deployment.yaml).
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=builder /build/target/springboot-0.0.1-SNAPSHOT.jar app.jar
-
-# OTel Java agent will be mounted at runtime via volume
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
