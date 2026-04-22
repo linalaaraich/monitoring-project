@@ -1,4 +1,14 @@
 ---
+- name: Ensure stack directory exists (parent for the bind-mount copy below)
+  # Play-level "Create stack directory" runs AFTER roles, but the bind-mount
+  # copy here runs mid-role and needs {{ stack_dir }} already present.
+  file:
+    path: "{{ stack_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Create OTel Collector config directory
   file:
     path: "{{ otel_collector_config_dir }}"
