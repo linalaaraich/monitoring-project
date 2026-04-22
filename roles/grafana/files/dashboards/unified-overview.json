@@ -112,7 +112,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"prometheus\"}",
+          "expr": "max(up{job=\"prometheus\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -185,7 +185,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"grafana\"}",
+          "expr": "max(up{job=\"grafana\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -258,7 +258,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"loki\"}",
+          "expr": "max(up{job=\"loki\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -331,7 +331,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"jaeger\"}",
+          "expr": "max(up{job=\"jaeger\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -404,7 +404,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{app_kubernetes_io_name=\"kong\"}",
+          "expr": "max(up{app_kubernetes_io_name=\"kong\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -477,7 +477,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{app_kubernetes_io_name=\"spring-boot\"}",
+          "expr": "max(up{app_kubernetes_io_name=\"spring-boot\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -550,84 +550,11 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"otel-collector\"}",
+          "expr": "max(up{job=\"otel-collector\"}) or vector(0)",
           "refId": "A"
         }
       ],
       "title": "OTel Collector",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "color": "red",
-                  "text": "DOWN"
-                },
-                "1": {
-                  "color": "green",
-                  "text": "UP"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "noValue": "N/A",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 4,
-        "x": 4,
-        "y": 4
-      },
-      "id": 9,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.1",
-      "targets": [
-        {
-          "expr": "up{app_kubernetes_io_name=\"spring-boot\"}",
-          "refId": "A"
-        }
-      ],
-      "title": "MySQL",
       "type": "stat"
     },
     {
@@ -1428,119 +1355,6 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Queries/s"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 31
-      },
-      "id": 22,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.1",
-      "targets": [
-        {
-          "expr": "hikaricp_connections_active{pod=~\"spring-boot.*\"} or vector(0)",
-          "legendFormat": "Active Connections",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(http_server_requests_seconds_count{pod=~\"spring-boot.*\", uri!~\"/actuator.*\"}[5m])",
-          "legendFormat": "Queries/s",
-          "refId": "B"
-        }
-      ],
-      "title": "MySQL Connections & Queries",
-      "type": "timeseries"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -2043,7 +1857,7 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "up{job=\"otel-collector\"}",
+          "expr": "max(up{job=\"otel-collector\"}) or vector(0)",
           "refId": "A"
         }
       ],
