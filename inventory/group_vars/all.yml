@@ -9,15 +9,17 @@ firewall_enabled: false
 ansible_control_ip: 192.168.127.20
 
 # VM IPs — update from Terraform outputs for AWS deployment
-monitoring_vm_ip: "192.168.127.10"
-application_vm_ip: "192.168.127.30"
-network_vm_ip: "192.168.127.15"
-ai_vm_ip: "<AI_VM_IP>"
+# Private IPs for inter-service traffic (stays inside VPC, no egress charges).
+monitoring_vm_ip: "10.0.1.68"
+# Legacy VM IPs (docker-compose path, replaced by k3s in Sprint 2 extension)
+application_vm_ip: "<UNUSED_K3S_PATH>"
+network_vm_ip: "<UNUSED_K3S_PATH>"
+ai_vm_ip: "<UNUSED_K3S_PATH>"
 
 # AWS managed services — update from Terraform outputs
-rds_endpoint: "<RDS_ENDPOINT>"
+rds_endpoint: "observability-rca-mysql.ccle6aaiufrf.us-east-1.rds.amazonaws.com"
 rds_port: 3306
-cloudfront_domain: "<CLOUDFRONT_DOMAIN>"
+cloudfront_domain: "<DISABLED_see_enable_cloudfront>"
 
 common_packages:
   - curl
@@ -52,6 +54,6 @@ otel_collector_http_port: 4318
 otel_collector_metrics_port: 8888
 otel_collector_health_port: 13133
 
-# k3s cluster endpoints (update from Terraform outputs)
-k3s_host_ip: "<K3S_HOST_IP>"
-gpu_host_ip: "<GPU_HOST_IP>"
+# k3s cluster endpoints (private IPs — internal to VPC)
+k3s_host_ip: "10.0.1.194"
+gpu_host_ip: "<UNUSED_CPU_OLLAMA>"

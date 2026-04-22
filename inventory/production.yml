@@ -3,19 +3,21 @@ all:
     monitoring:
       hosts:
         monitoring-vm:
-          ansible_host: 192.168.127.10
+          ansible_host: 52.202.21.192
           ansible_user: deploy
     k3s_cluster:
       hosts:
         k3s-node:
-          ansible_host: <K3S_HOST_IP>
+          ansible_host: 52.5.239.234
           ansible_user: deploy
           k3s_control_node: true
-    gpu:
-      hosts:
-        gpu-vm:
-          ansible_host: <GPU_HOST_IP>
-          ansible_user: deploy
+    # GPU group disabled — account G+VT quota = 0 on 2026-04-22.
+    # Ollama runs CPU-only on the k3s node. Flip back when quota lands.
+    # gpu:
+    #   hosts:
+    #     gpu-vm:
+    #       ansible_host: <GPU_HOST_IP>
+    #       ansible_user: deploy
     # Legacy groups (replaced by k3s_cluster + gpu in Sprint 2 extension)
     # Kept for reference — do not use with the K8s deployment path
     # application:
