@@ -6,18 +6,23 @@ imageTag: "latest"
 triageService:
   image: cires/triage-service
   port: 8090
-  # CPU inference on llama3.2:3b takes 60–180s per call under a real-sized
-  # prompt. Ollama per-request timeout must exceed that; pipeline timeout
-  # must accommodate retries. Defaults assume CPU Ollama on t3.xlarge.
-  # For GPU nodes, these can be dropped back to 30 / 300.
-  ollamaRequestTimeout: 300
-  pipelineTimeout: 900
+  # CPU inference on llama3.2:3b with real-sized, 3-pillar context takes
+  # 10-15 min per Ollama call in practice (verified empirically on an
+  # AWS t3.xlarge with 4 vCPUs). The per-request timeout must give the
+  # first attempt enough room to complete rather than timing out and
+  # retrying with a fresh large prompt. On GPU these drop to ~30 / ~300.
+  ollamaRequestTimeout: 1800   # 30 min per Ollama call (CPU)
+  pipelineTimeout: 2400        # 40 min total pipeline budget (fits 1 retry)
 
-  # Prompt-size controls — shrinking these shortens the LLM prompt, which
-  # speeds up CPU inference dramatically. Bump back up once on GPU.
-  lokiLogLimit: 10
-  jaegerTraceLimit: 3
-  prometheusRangeMinutes: 5
+  # Prompt-size controls. Smaller = much faster inference on CPU, at the
+  # cost of less evidence for the LLM. Empirically, with these values:
+  #   - Ollama completes in 3-10 min (not 10-20)
+  #   - The LLM still produces schema-conformant JSON reliably
+  #   - Evidence is sparse but sufficient for a "escalate vs dismiss"
+  #     call plus a short RCA. Bump back up on GPU.
+  lokiLogLimit: 5
+  jaegerTraceLimit: 1
+  prometheusRangeMinutes: 3
   resources:
     requests:
       cpu: 250m
