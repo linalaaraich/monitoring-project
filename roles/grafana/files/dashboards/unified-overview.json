@@ -1732,7 +1732,7 @@
                 "value": [
                   {
                     "title": "View in Jaeger",
-                    "url": "http://192.168.127.10:16686/trace/${__value.raw}",
+                    "url": "http://52.202.21.192:16686/trace/${__value.raw}",
                     "targetBlank": true
                   }
                 ]
@@ -1795,7 +1795,7 @@
                 "value": [
                   {
                     "title": "View in Jaeger",
-                    "url": "http://192.168.127.10:16686/trace/${__value.raw}",
+                    "url": "http://52.202.21.192:16686/trace/${__value.raw}",
                     "targetBlank": true
                   }
                 ]
@@ -2165,7 +2165,7 @@
                 "value": [
                   {
                     "title": "View in Jaeger",
-                    "url": "http://192.168.127.10:16686/trace/${__value.raw}",
+                    "url": "http://52.202.21.192:16686/trace/${__value.raw}",
                     "targetBlank": true
                   }
                 ]

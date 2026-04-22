@@ -84,6 +84,16 @@ spec:
               value: "true"
             - name: OTEL_INSTRUMENTATION_SPRING_WEBMVC_ENABLED
               value: "true"
+            # Inject trace_id + span_id into every log line via Logback MDC,
+            # so Grafana's Loki derived-field regex `trace_id=([0-9a-f]{32})`
+            # turns each trace ID into a clickable Jaeger link. Without this,
+            # Spring's default log pattern omits MDC keys entirely.
+            - name: OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED
+              value: "true"
+            - name: OTEL_INSTRUMENTATION_LOGBACK_MDC_ENABLED
+              value: "true"
+            - name: LOGGING_PATTERN_LEVEL
+              value: "%5p [trace_id=%X{trace_id:-},span_id=%X{span_id:-}]"
             {{- end }}
           {{- if .Values.otel.enabled }}
           volumeMounts:

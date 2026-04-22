@@ -17,10 +17,19 @@ datasources:
     uid: loki
     jsonData:
       derivedFields:
-        - matcherType: label
-          matcherRegex: traceid
+        # matcherType "regex" runs the pattern against the log body (not the
+        # stream label, which is what "label" does). Spring Boot's log pattern
+        # is customized via LOGGING_PATTERN_LEVEL to include "trace_id=<hex>"
+        # in every line via the OTel Java Agent's logback-mdc instrumentation.
+        - matcherType: regex
+          matcherRegex: 'trace_id=([0-9a-f]{32})'
           name: TraceID
-          url: 'http://{{ monitoring_vm_ip }}:16686/trace/$${__value.raw}'
+          # IMPORTANT: This URL is rendered into the USER'S BROWSER when they
+          # click a trace_id in a log line — so it must be an address the
+          # operator's browser can reach, NOT a private/in-VPC IP.
+          # Uses monitoring_vm_public_ip (group_vars/all.yml) which is set to
+          # the monitoring VM's Elastic IP on AWS deployments.
+          url: 'http://{{ monitoring_vm_public_ip | default(monitoring_vm_ip) }}:{{ jaeger_port_ui }}/trace/$${__value.raw}'
           urlDisplayLabel: View in Jaeger
           openInNewTab: true
 
