@@ -1,0 +1,45 @@
+---
+# Alternative inventory that reaches hosts by their Tailscale MagicDNS
+# hostname. Use this once every node has completed `playbooks/tailscale.yml`
+# — then the controller doesn't care what public IPs AWS hands out,
+# nodes stay reachable by name regardless of re-provisioning or DHCP drift.
+#
+# Point ansible at this file instead of production.yml:
+#     ansible-playbook -i inventory/tailnet.yml playbooks/site.yml
+# Or set in ansible.cfg:
+#     inventory = inventory/tailnet.yml
+#
+# Requires:
+#   - Controller is on the same tailnet (run `tailscale status` to check)
+#   - MagicDNS is enabled in the tailnet admin (default on since 2023)
+#   - Each node has been joined with `--hostname=<the name below>` so the
+#     name resolves. The tailscale role in this repo uses
+#     tailscale_hostname = inventory_hostname by default, so names match.
+
+all:
+  children:
+    monitoring:
+      hosts:
+        monitoring-vm:
+          ansible_host: observability-rca-monitoring
+          ansible_user: deploy
+    k3s_cluster:
+      hosts:
+        k3s-node:
+          ansible_host: observability-rca-k3s
+          ansible_user: deploy
+          k3s_control_node: true
+    # Optional — Lina's laptop running the AI stack. Uncomment when the
+    # role should also drive the laptop (not needed for cloud-only runs).
+    # laptop_workstations:
+    #   hosts:
+    #     lina-laptop:
+    #       ansible_host: adolin-wsl
+    #       ansible_user: lina
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_private_key_file: ~/.ssh/ansible_key
+    timezone: "Africa/Casablanca"
+    ntp_servers:
+      - 0.ma.pool.ntp.org
+      - 1.ma.pool.ntp.org

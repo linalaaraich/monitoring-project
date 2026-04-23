@@ -1,0 +1,81 @@
+---
+# Install Tailscale and join the tailnet. Idempotent — safe to re-run:
+# if already joined, 'tailscale up' without --authkey is a no-op.
+
+- name: Fail loud if no auth key + node not already joined
+  ansible.builtin.shell: |
+    if ! command -v tailscale >/dev/null 2>&1; then
+        # first-time install, definitely need a key
+        echo "NEED_KEY"; exit 1
+    fi
+    if ! tailscale status --peers=false >/dev/null 2>&1; then
+        # installed but not joined
+        echo "NEED_KEY"; exit 1
+    fi
+    echo "ALREADY_JOINED"
+  register: ts_state
+  changed_when: false
+  failed_when: false
+
+- name: Assert auth key when first-joining
+  ansible.builtin.assert:
+    that:
+      - tailscale_auth_key | length > 0
+    fail_msg: >-
+      TAILSCALE_AUTH_KEY is empty and {{ inventory_hostname }} isn't on the
+      tailnet yet. Generate an ephemeral+reusable auth key at
+      https://login.tailscale.com/admin/settings/keys and re-run with
+      TAILSCALE_AUTH_KEY=tskey-auth-... ansible-playbook ...
+  when: ts_state.stdout == "NEED_KEY"
+
+- name: Install Tailscale repo key
+  ansible.builtin.get_url:
+    url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_lsb.codename }}.noarmor.gpg"
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+
+- name: Add Tailscale apt source
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/tailscale.list
+    content: |
+      deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu {{ ansible_lsb.codename }} main
+    mode: "0644"
+  register: ts_apt_source
+
+- name: Refresh apt cache after adding Tailscale repo
+  ansible.builtin.apt:
+    update_cache: true
+  when: ts_apt_source.changed
+
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+
+- name: Enable + start tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    enabled: true
+    state: started
+
+- name: Join the tailnet (idempotent — existing nodes skip the key)
+  ansible.builtin.command:
+    cmd: >-
+      tailscale up
+      {% if ts_state.stdout == "NEED_KEY" %}--authkey={{ tailscale_auth_key }}{% endif %}
+      --hostname={{ tailscale_hostname }}
+      --accept-dns={{ 'true' if tailscale_accept_dns else 'false' }}
+      --accept-routes={{ 'true' if tailscale_accept_routes else 'false' }}
+      {% if tailscale_tags | length > 0 %}--advertise-tags={{ tailscale_tags | join(',') }}{% endif %}
+  no_log: true  # don't leak the auth key to ansible logs
+  when: ts_state.stdout == "NEED_KEY" or tailscale_reauth | default(false)
+
+- name: Show tailnet IP
+  ansible.builtin.command:
+    cmd: tailscale ip -4
+  register: ts_ip
+  changed_when: false
+
+- name: Report
+  ansible.builtin.debug:
+    msg: "{{ inventory_hostname }} joined tailnet as {{ tailscale_hostname }} ({{ ts_ip.stdout | trim }})"

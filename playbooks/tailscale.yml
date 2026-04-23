@@ -1,0 +1,20 @@
+---
+# Apply the tailscale role to every managed host. Designed to be run
+# once per new environment to put every node on the tailnet + reachable
+# by MagicDNS hostname. Safe to re-run — idempotent.
+#
+# Usage:
+#     TAILSCALE_AUTH_KEY=tskey-auth-... ansible-playbook playbooks/tailscale.yml
+#
+# After this plays cleanly, swap your ansible inventory to use the MagicDNS
+# names (see inventory/tailnet.yml) so subsequent playbooks route over the
+# tailnet instead of public IPs. That's the fresh-setup reproducibility
+# goal — the controller can reach every node by name, regardless of what
+# IP AWS hands out.
+
+- name: Install Tailscale on every host
+  hosts: all
+  gather_facts: true
+  become: true
+  roles:
+    - tailscale

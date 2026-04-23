@@ -1,0 +1,30 @@
+---
+# Tailscale install + auth defaults.
+#
+# tailscale_auth_key: REQUIRED for first-time join. Use an ephemeral,
+#   reusable auth key from https://login.tailscale.com/admin/settings/keys
+#   so re-runs of this role on a fresh machine just work without human
+#   approval in the tailnet admin. Once joined, the key is no longer
+#   needed — Tailscale remembers the node identity across reboots.
+#   Pass via:
+#     --extra-vars tailscale_auth_key=tskey-auth-xxxx
+#   or from the env:
+#     TAILSCALE_AUTH_KEY=tskey-auth-xxxx ansible-playbook ...
+#
+# tailscale_hostname: the name the node advertises on the tailnet.
+#   Defaults to inventory_hostname so the Ansible inventory name is the
+#   MagicDNS name too — no divergence.
+#
+# tailscale_tags: tags applied on join. Lets you write ACLs against
+#   tag:server, tag:monitoring, etc. rather than specific hostnames.
+#
+# tailscale_accept_routes: whether this node should accept subnet routes
+#   advertised by other tailnet nodes. For our monitoring VM that means
+#   it can reach application-VPC private IPs through the k3s box if that
+#   advertises them. Off by default — only turn on when you need it.
+
+tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
+tailscale_hostname: "{{ inventory_hostname }}"
+tailscale_tags: []
+tailscale_accept_routes: false
+tailscale_accept_dns: true   # needed for MagicDNS short-hostname lookups
