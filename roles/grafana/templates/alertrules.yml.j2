@@ -1,11 +1,19 @@
 apiVersion: 1
 
-{# K8s migration: When k3s_sd_enabled is true, use pod-based selectors instead of VM job labels #}
-{# Spring Boot selector: VM mode uses job="app-spring-actuator", K8s uses app="spring-boot" #}
-{# Monitoring VM node exporter selector is the same in both modes (monitoring VM is NOT migrated to K8s) #}
+{# K8s migration: When k3s_sd_enabled is true, use pod-based selectors instead of VM job labels. #}
+{# #}
+{# Spring Boot selector (k3s): the Prometheus kubernetes_sd scrape attaches `container` but NOT `app` #}
+{# as a label (kong-kong is the only pod with `app=...`). So `app="spring-boot"` matched nothing in #}
+{# practice. The `container="spring-boot"` label is stable across restarts/re-deploys. We also exclude #}
+{# /actuator URIs because the app scraping itself inflates request counts with sub-ms spans that pull #}
+{# the p95 down and mask real user-facing latency. #}
+{# #}
+{# OTel selector (k3s): same reason — pods don't get `app=`. `container="otel-collector"` targets the #}
+{# in-cluster collector (the one Spring Boot actually exports to). The VM-mode `job="otel-collector"` #}
+{# label still exists for the monitoring-VM-local collector, but that one is covered by TargetDown. #}
 {% if k3s_sd_enabled | default(false) %}
-{% set spring_selector = 'app="spring-boot"' %}
-{% set otel_selector = 'app="otel-collector"' %}
+{% set spring_selector = 'container="spring-boot",uri!~"/actuator.*"' %}
+{% set otel_selector = 'container="otel-collector"' %}
 {% else %}
 {% set spring_selector = 'job="app-spring-actuator"' %}
 {% set otel_selector = 'job="otel-collector"' %}

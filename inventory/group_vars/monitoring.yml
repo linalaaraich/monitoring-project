@@ -11,10 +11,13 @@ grafana_contact_email: "laaraichlina@gmail.com"
 
 # Triage service webhook — Grafana Alerting sends all alerts here.
 # Triage is now a ClusterIP Service inside k3s; Grafana reaches it via the
-# Kong NodePort route (/triage is proxied through Kong, see kong-config.yaml).
-# If Kong isn't exposing /triage yet, fall back to the cluster NodePort or
-# an SSH-tunneled localhost:8090.
-triage_service_webhook_url: "http://{{ k3s_host_ip }}:30080/triage/webhook/grafana"
+# Triage service webhook endpoint. As of 2026-04-23 the triage service runs
+# on Lina's laptop (cires-ai host, reachable at 100.117.118.70 over tailscale)
+# — not on k3s. This URL is the laptop's tailscale IP + triage's /webhook/grafana
+# route. Monitoring VM is on the same tailnet (see `tailscale status`) so the
+# webhook POST routes through the tailnet, not the public internet.
+# Verified reachable with: `ansible monitoring -m shell -a "curl -fsS --max-time 5 http://100.117.118.70:8090/health"`
+triage_service_webhook_url: "http://100.117.118.70:8090/webhook/grafana"
 
 loki_port: 3100
 jaeger_port_ui: 16686
