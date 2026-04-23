@@ -79,6 +79,12 @@ services:
       GF_SMTP_FROM_ADDRESS: "{{ grafana_smtp_from }}"
       GF_SMTP_FROM_NAME: "Grafana CIRES"
       GF_SMTP_STARTTLS_POLICY: "MandatoryStartTLS"
+      # Public URL used for alert generatorURL, dashboard links, etc.
+      # Without this, Grafana uses http://localhost:3000 and every link in
+      # the webhook payload (and therefore in the triage escalation email)
+      # points at an unreachable address on the recipient's machine.
+      GF_SERVER_ROOT_URL: "{{ grafana_external_url | default('http://' + ansible_default_ipv4.address + ':' + (grafana_port | string)) }}"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "false"
     volumes:
       - {{ grafana_data_dir }}:/var/lib/grafana
       - {{ grafana_provisioning_dir }}:/etc/grafana/provisioning:ro
