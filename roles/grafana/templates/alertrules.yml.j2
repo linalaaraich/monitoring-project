@@ -58,7 +58,12 @@ groups:
         for: 2m
         labels:
           severity: warning
+          service: spring-boot
+          signal: metric
+          component: api
+          timeframe: 10m
         annotations:
+          expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000'
           summary: "P95 request latency exceeds 1s"
           description: "The 95th percentile latency for Spring Boot requests has been above 1000ms for 2 minutes."
 
@@ -94,7 +99,12 @@ groups:
         for: 2m
         labels:
           severity: warning
+          service: kong
+          signal: metric
+          component: gateway
+          timeframe: 10m
         annotations:
+          expr: 'histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))'
           summary: "P95 Kong request latency exceeds 1s"
           description: "The 95th percentile end-to-end latency measured at Kong has been above 1000ms for 2 minutes."
 
@@ -130,7 +140,12 @@ groups:
         for: 2m
         labels:
           severity: critical
+          service: otel-collector
+          signal: metric
+          component: observability
+          timeframe: 10m
         annotations:
+          expr: '(sum(rate(otelcol_processor_dropped_spans_total[5m])) / clamp_min(sum(rate(otelcol_receiver_accepted_spans_total[5m])), 1))'
           summary: "OTel Collector dropping >5% of spans"
           description: "The OTel Collector is dropping more than 5% of received spans."
 
@@ -166,7 +181,12 @@ groups:
         for: 1m
         labels:
           severity: critical
+          service: otel-collector
+          signal: metric
+          component: observability
+          timeframe: 5m
         annotations:
+          expr: 'up{{ "{" }}{{ otel_selector }}{{ "}" }}'
           summary: "OTel Collector is down"
           description: "The OTel Collector instance has been unreachable for 1 minute."
 
@@ -207,7 +227,12 @@ groups:
         for: 5m
         labels:
           severity: warning
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 10m
         annotations:
+          expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!=""} / node_filesystem_size_bytes{mountpoint="/",fstype!=""}) * 100'
           summary: "Disk usage above 85%"
           description: "Root filesystem usage has exceeded 85% for 5 minutes."
 
@@ -243,7 +268,12 @@ groups:
         for: 2m
         labels:
           severity: critical
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 10m
         annotations:
+          expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!=""} / node_filesystem_size_bytes{mountpoint="/",fstype!=""}) * 100'
           summary: "Disk usage above 95%"
           description: "Root filesystem usage has exceeded 95%. Immediate action required."
 
@@ -279,7 +309,12 @@ groups:
         for: 5m
         labels:
           severity: warning
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 10m
         annotations:
+          expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
           summary: "High CPU usage"
           description: "CPU usage has been above 85% for 5 minutes."
 
@@ -315,7 +350,12 @@ groups:
         for: 2m
         labels:
           severity: critical
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 10m
         annotations:
+          expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
           summary: "Critical CPU usage"
           description: "CPU usage has been above 95% for 2 minutes."
 
@@ -351,7 +391,12 @@ groups:
         for: 5m
         labels:
           severity: warning
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 10m
         annotations:
+          expr: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
           summary: "High memory usage"
           description: "Memory usage has exceeded 85% for 5 minutes."
 
@@ -387,7 +432,12 @@ groups:
         for: 2m
         labels:
           severity: critical
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 10m
         annotations:
+          expr: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
           summary: "Critical memory usage"
           description: "Memory usage has exceeded 95%. OOM risk."
 
@@ -423,7 +473,12 @@ groups:
         for: 1m
         labels:
           severity: warning
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 5m
         annotations:
+          expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
           summary: "Medium CPU usage"
           description: "CPU usage has been above 80% for 1 minute."
 
@@ -459,7 +514,12 @@ groups:
         for: 1m
         labels:
           severity: warning
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 5m
         annotations:
+          expr: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
           summary: "Medium memory usage"
           description: "Memory usage is above 80% for 1 minute."
 
@@ -495,7 +555,12 @@ groups:
         for: 2m
         labels:
           severity: critical
+          service: monitoring
+          signal: metric
+          component: scrape
+          timeframe: 5m
         annotations:
+          expr: 'up == 0'
           summary: "Monitored target is down"
           description: "A Prometheus scrape target has been unreachable for 2 minutes."
 
@@ -531,7 +596,12 @@ groups:
         for: 30m
         labels:
           severity: warning
+          service: k3s-node
+          signal: metric
+          component: infrastructure
+          timeframe: 6h
         annotations:
+          expr: 'predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!=""}[6h], 24*3600)'
           summary: "Disk predicted to fill within 24h"
           description: "Based on the last 6 hours of data, the root filesystem is predicted to run out of space within 24 hours."
 
@@ -572,7 +642,12 @@ groups:
         for: 5m
         labels:
           severity: warning
+          service: loki
+          signal: metric
+          component: observability
+          timeframe: 10m
         annotations:
+          expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="",{{ mon_node_selector }}} / node_filesystem_size_bytes{mountpoint="/",fstype!="",{{ mon_node_selector }}}) * 100'
           summary: "High disk usage on monitoring VM (Loki storage)"
           description: "Root filesystem on monitoring VM is at high usage."
 
@@ -608,7 +683,12 @@ groups:
         for: 2m
         labels:
           severity: critical
+          service: loki
+          signal: metric
+          component: observability
+          timeframe: 10m
         annotations:
+          expr: '(1 - node_filesystem_avail_bytes{mountpoint="/",fstype!="",{{ mon_node_selector }}} / node_filesystem_size_bytes{mountpoint="/",fstype!="",{{ mon_node_selector }}}) * 100'
           summary: "Critical disk usage on monitoring VM (Loki storage)"
           description: "Root filesystem on monitoring VM is at critical usage. Immediate action required."
 
@@ -644,7 +724,12 @@ groups:
         for: 10m
         labels:
           severity: warning
+          service: loki
+          signal: log
+          component: observability
+          timeframe: 15m
         annotations:
+          expr: 'rate(loki_distributor_bytes_received_total[5m])'
           summary: "Log ingestion rate low"
           description: "Loki log ingestion rate has been below 1 KB/sec for 10 minutes. Check OTel Collector log pipelines."
 
@@ -680,6 +765,11 @@ groups:
         for: 30m
         labels:
           severity: warning
+          service: loki
+          signal: metric
+          component: observability
+          timeframe: 6h
         annotations:
+          expr: 'predict_linear(node_filesystem_avail_bytes{mountpoint="/",fstype!="",{{ mon_node_selector }}}[6h], 24*3600)'
           summary: "Loki storage disk predicted to fill within 24h"
           description: "Based on the last 6 hours of data, the monitoring VM root filesystem is predicted to run out of space within 24 hours."
