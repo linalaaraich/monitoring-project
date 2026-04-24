@@ -1,5 +1,10 @@
 apiVersion: 1
 
+# Option A (2026-04-24): the triage service is the sole notifier. The previous
+# gmail-smtp contact point let alert rules bypass triage and email directly —
+# which is exactly what happened overnight 2026-04-23→24, producing noise emails
+# with no RCA context and no dashboard record. deleteContactPoints forces
+# Grafana to remove the gmail-smtp receiver on provisioning reload.
 contactPoints:
   - orgId: 1
     name: triage-webhook
@@ -11,12 +16,7 @@ contactPoints:
           httpMethod: POST
           maxAlerts: 0
         disableResolveMessage: false
+
+deleteContactPoints:
   - orgId: 1
-    name: gmail-smtp
-    receivers:
-      - uid: gmail-email
-        type: email
-        settings:
-          addresses: "{{ grafana_contact_email }}"
-          singleEmail: false
-        disableResolveMessage: false
+    uid: gmail-email
