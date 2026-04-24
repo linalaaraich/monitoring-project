@@ -29,13 +29,13 @@ all:
           ansible_host: observability-rca-k3s
           ansible_user: deploy
           k3s_control_node: true
-    # Optional — Lina's laptop running the AI stack. Uncomment when the
-    # role should also drive the laptop (not needed for cloud-only runs).
-    # laptop_workstations:
-    #   hosts:
-    #     lina-laptop:
-    #       ansible_host: adolin-wsl
-    #       ansible_user: lina
+    # Lina's laptop (WSL2) running the AI stack — triage + 5 MCPs + Ollama.
+    # Managed by roles/triage_laptop; see playbooks/laptop.yml.
+    laptop_workstations:
+      hosts:
+        adolin-wsl:
+          ansible_host: adolin-wsl
+          ansible_user: lina
   vars:
     ansible_python_interpreter: /usr/bin/python3
     ansible_ssh_private_key_file: ~/.ssh/ansible_key

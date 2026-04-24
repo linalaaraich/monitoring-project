@@ -1,0 +1,104 @@
+---
+# triage_laptop — manages the AI stack on the laptop (adolin-wsl) without
+# requiring manual `docker compose` runs on the laptop side.
+#
+# Expected state on the laptop BEFORE this role runs:
+#   - sshd is up, controller's public key authorized for user `lina`
+#   - Passwordless sudo enabled for `lina`
+#   - `lina` is in the `docker` group
+#   - {{ laptop_compose_dir }}/docker-compose.yml already exists
+#     (role intentionally does NOT manage the compose file itself — Lina
+#      wrote it carefully; we only manage .env + lifecycle)
+
+- name: Sanity check — compose directory exists
+  ansible.builtin.stat:
+    path: "{{ laptop_compose_dir }}"
+  register: compose_dir_stat
+
+- name: Fail if compose dir is missing
+  ansible.builtin.fail:
+    msg: >-
+      Laptop compose dir {{ laptop_compose_dir }} does not exist. Create it
+      manually (with docker-compose.yml present) before running this role.
+  when: not compose_dir_stat.stat.exists
+
+- name: Sanity check — docker-compose.yml exists inside compose dir
+  ansible.builtin.stat:
+    path: "{{ laptop_compose_dir }}/docker-compose.yml"
+  register: compose_file_stat
+
+- name: Fail if docker-compose.yml is missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ laptop_compose_dir }}/docker-compose.yml not found. This role manages
+      the .env file and lifecycle, not the compose itself.
+  when: not compose_file_stat.stat.exists
+
+# ---------------------------------------------------------------------------
+# SMTP password preservation. The Gmail app password lives only in the
+# existing .env on the laptop. If the controller operator didn't export
+# GRAFANA_SMTP_PASSWORD for this run, read the existing password off the
+# remote file and reuse it. This avoids the footgun of an ansible run
+# wiping SMTP creds and silently breaking escalation emails.
+# ---------------------------------------------------------------------------
+- name: Read existing SMTP_PASSWORD from remote .env (for preservation)
+  ansible.builtin.shell:
+    cmd: >-
+      grep -E '^SMTP_PASSWORD=' {{ laptop_compose_dir }}/.env
+      | head -1 | cut -d= -f2- || true
+  register: current_smtp_pw
+  changed_when: false
+  failed_when: false
+  check_mode: false   # read-only; needs to run even in --check so preservation works
+
+- name: Resolve effective SMTP password (controller env > remote file > empty)
+  ansible.builtin.set_fact:
+    _effective_smtp_password: >-
+      {{ lookup('env', 'GRAFANA_SMTP_PASSWORD')
+         | default(current_smtp_pw.stdout | default('') | trim, true) }}
+
+- name: Template the .env file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ laptop_compose_dir }}/.env"
+    mode: '0600'  # contains SMTP password — keep tight
+    backup: yes   # keep a .bak so hand-edits can be diff'd if accidentally overwritten
+  register: env_templated
+  vars:
+    laptop_smtp_password: "{{ _effective_smtp_password }}"
+
+- name: Docker compose — pull latest images
+  ansible.builtin.shell:
+    cmd: docker compose pull
+    chdir: "{{ laptop_compose_dir }}"
+  when: laptop_compose_pull | bool
+  changed_when: true
+  register: compose_pull
+
+- name: Docker compose — up -d (applies new image + new env if changed)
+  ansible.builtin.shell:
+    cmd: docker compose up -d
+    chdir: "{{ laptop_compose_dir }}"
+  register: compose_up
+  changed_when: "'Container' in compose_up.stderr or 'Container' in compose_up.stdout"
+
+- name: Wait for triage service to report healthy
+  ansible.builtin.uri:
+    url: "http://localhost:8090/health"
+    method: GET
+    return_content: yes
+    status_code: 200
+  register: triage_health
+  until: triage_health.status == 200 and (triage_health.json.status | default('')) == "healthy"
+  retries: 15
+  delay: 4
+  when: not ansible_check_mode
+
+- name: Show uptime of the just-deployed triage service
+  ansible.builtin.debug:
+    msg: >-
+      Triage service is healthy at {{ laptop_compose_dir }} —
+      uptime {{ triage_health.json.uptime_seconds }}s
+      (env_templated.changed={{ env_templated.changed }},
+       compose_up.changed={{ compose_up.changed | default(false) }})
+  when: not ansible_check_mode and triage_health.json is defined

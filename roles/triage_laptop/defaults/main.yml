@@ -1,0 +1,67 @@
+# Defaults for the triage_laptop role.
+# Override these in inventory/group_vars/laptop_workstations.yml or via --extra-vars.
+---
+
+# Where the compose stack lives on the laptop. Must already exist — the role
+# manages the .env and runs `docker compose up -d`, it does NOT bootstrap the
+# compose.yml (Lina wrote that by hand on purpose).
+laptop_compose_dir: "/home/lina/cires-ai"
+
+# Image tag the laptop should pull. Watchtower will auto-pull newer :main
+# builds between runs; this is what ansible requests at deploy time.
+triage_image_tag: "main"
+mcp_image_tag: "laptop-dev"
+
+# Ollama
+laptop_ollama_model: "qwen2.5:7b"
+
+# Monitoring-vm endpoints (MCPs query these). Tailnet MagicDNS preferred
+# over EIPs so re-provisioning doesn't break the link.
+monitoring_vm_ip: "100.74.21.104"    # observability-rca-monitoring tailnet IP
+
+# Grafana public URL for email + backfill API. Same monitoring VM, port 3000.
+laptop_grafana_url: "http://{{ monitoring_vm_ip }}:3000"
+laptop_grafana_api_user: "admin"
+laptop_grafana_api_password: "admin"   # weak default, matches current deploy
+
+# Triage knobs (match app/config.py defaults; override only if you want drift
+# from the source-of-truth in the triage image)
+laptop_prometheus_range_minutes: 30
+laptop_loki_log_limit: 500
+laptop_jaeger_trace_limit: 100
+laptop_context_timeout: 8
+
+laptop_dedup_window_seconds: 600
+laptop_triage_suppression_enabled: true
+laptop_triage_history_lookback_minutes: 15
+laptop_triage_data_starved_retry_enabled: true
+laptop_triage_bounded_agency_enabled: true
+
+laptop_drain3_alert_enabled: true
+laptop_drain3_alert_rate_threshold: 0.10
+laptop_drain3_alert_min_lines: 100
+laptop_drain3_alert_cooldown_seconds: 600
+
+laptop_ollama_request_timeout: 300
+laptop_pipeline_timeout: 900
+laptop_circuit_breaker_failure_threshold: 5
+laptop_circuit_breaker_cooldown_seconds: 60
+
+laptop_startup_backfill_threshold_minutes: 15
+laptop_startup_backfill_max_gap_hours: 24
+
+# SMTP — resolved at playbook run time from the controller's env. Mirrors the
+# same pattern already used in monitoring.yml. Set on the controller before
+# running with:
+#   export GRAFANA_SMTP_PASSWORD="<app-password>"
+#   ansible-playbook -i inventory/tailnet.yml playbooks/laptop.yml
+laptop_smtp_host: "smtp.gmail.com"
+laptop_smtp_port: 587
+laptop_smtp_user: "laaraichlina@gmail.com"
+laptop_smtp_password: "{{ lookup('env', 'GRAFANA_SMTP_PASSWORD') }}"
+laptop_smtp_from: "laaraichlina@gmail.com"
+laptop_notification_email: "laaraichlina@gmail.com"
+
+# Run `docker compose pull` before `up -d`. Disable if you want to test a
+# locally-built image without ansible overwriting it.
+laptop_compose_pull: true

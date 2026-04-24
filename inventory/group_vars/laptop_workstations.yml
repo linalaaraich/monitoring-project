@@ -1,0 +1,21 @@
+# Laptop-workstation group vars. Override role defaults here to keep your
+# specific laptop config out of the role (which is generic). The role's
+# defaults/main.yml is the source of truth for the full tunable list.
+
+# Compose location matches your current manual setup
+laptop_compose_dir: "/home/lina/cires-ai"
+
+# Image tags — swap to pin a specific SHA if you're testing a build
+triage_image_tag: "main"
+mcp_image_tag: "laptop-dev"
+
+# Current model on the GPU laptop
+laptop_ollama_model: "qwen2.5:7b"
+
+# Monitoring-vm tailscale IP (resolves via MagicDNS from adolin-wsl too)
+monitoring_vm_ip: "100.74.21.104"
+laptop_grafana_url: "http://100.74.21.104:3000"
+
+# Set to false during a specific test of a local build so ansible doesn't
+# overwrite it with the GHCR image
+laptop_compose_pull: true

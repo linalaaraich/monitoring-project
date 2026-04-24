@@ -1,0 +1,35 @@
+---
+# playbooks/laptop.yml — Deploy/update the AI stack on the laptop (adolin-wsl).
+#
+# This playbook:
+#   1. Templates {{ laptop_compose_dir }}/.env from group_vars + vault
+#   2. Runs `docker compose pull && docker compose up -d` to apply
+#   3. Waits for triage /health to return 200
+#
+# It does NOT manage the docker-compose.yml itself (Lina wrote that by hand).
+# If compose topology changes, update the file on the laptop directly, then
+# run this playbook to pick up any new env variables.
+#
+# Usage (from the controller):
+#   export GRAFANA_SMTP_PASSWORD="<gmail-app-password>"
+#   ansible-playbook -i inventory/tailnet.yml playbooks/laptop.yml
+#
+# Override vars at the CLI if you need to test a specific image tag:
+#   ansible-playbook -i inventory/tailnet.yml playbooks/laptop.yml \
+#     -e triage_image_tag=sha-421cc8b
+
+- name: Deploy triage + MCPs + Ollama on laptop workstations
+  hosts: laptop_workstations
+  gather_facts: yes           # need ansible_date_time for the .env comment
+  become: no                  # role runs as lina, which is in docker group
+
+  pre_tasks:
+    - name: Warn if GRAFANA_SMTP_PASSWORD is not set on the controller
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: GRAFANA_SMTP_PASSWORD is empty. SMTP notifications will fail.
+          Re-run with `export GRAFANA_SMTP_PASSWORD=... && ansible-playbook ...`
+      when: lookup('env', 'GRAFANA_SMTP_PASSWORD') | length == 0
+
+  roles:
+    - role: triage_laptop
