@@ -37,13 +37,23 @@ laptop_triage_history_lookback_minutes: 15
 laptop_triage_data_starved_retry_enabled: true
 laptop_triage_bounded_agency_enabled: true
 
+# 2026-04-24 audit finding: drain3 had NEVER fired a self-alert despite
+# 123k log lines processed and 257 clusters including real OOM / JDBC /
+# OTel-export-timeout patterns. Cause: the original thresholds required
+# 100+ lines AND 10% anomalous per 30s batch — a bar that's essentially
+# unreachable once drain3 has warmed up (all clusters have match_count>5
+# → nothing counts as anomalous). Relaxed to catch real errors earlier.
 laptop_drain3_alert_enabled: true
-laptop_drain3_alert_rate_threshold: 0.10
-laptop_drain3_alert_min_lines: 100
+laptop_drain3_alert_rate_threshold: 0.02   # was 0.10
+laptop_drain3_alert_min_lines: 20          # was 100
 laptop_drain3_alert_cooldown_seconds: 600
 
-laptop_ollama_request_timeout: 300
-laptop_pipeline_timeout: 900
+# 2026-04-24: bumped from 300→1800 per Lina — some cold-start first-calls
+# with large context + structured outputs schema can push past 5 min on
+# GTX 1060 + qwen2.5:7b. 30 min ceiling per LLM call; pipeline budget
+# below must exceed this so timeout never hits the pipeline wrapper first.
+laptop_ollama_request_timeout: 1800
+laptop_pipeline_timeout: 2400
 laptop_circuit_breaker_failure_threshold: 5
 laptop_circuit_breaker_cooldown_seconds: 60
 
