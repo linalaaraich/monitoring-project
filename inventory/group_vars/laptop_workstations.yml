@@ -16,6 +16,11 @@ laptop_ollama_model: "qwen2.5:7b"
 monitoring_vm_ip: "100.74.21.104"
 laptop_grafana_url: "http://100.74.21.104:3000"
 
-# Set to false during a specific test of a local build so ansible doesn't
-# overwrite it with the GHCR image
-laptop_compose_pull: true
+# The MCP images (cires/mcp-*:laptop-dev) are LOCAL-ONLY builds on adolin-wsl
+# — never pushed to a registry. A bulk `docker compose pull` would try to
+# fetch them from docker.io/cires/* and fail. Watchtower already handles
+# pulling the one remote image (ghcr.io/linalaaraich/monitoring-triage-service)
+# in the background every 60s, so the ansible role's pull step is redundant.
+# Override to true only if you want ansible to force-pull a specific tag
+# (e.g. `--extra-vars 'laptop_compose_pull=true triage_image_tag=sha-abc1234'`).
+laptop_compose_pull: false
