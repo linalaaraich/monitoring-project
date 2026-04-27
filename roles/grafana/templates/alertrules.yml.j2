@@ -26,6 +26,11 @@ groups:
     folder: Provisioned Alerts
     interval: 60s
     rules:
+      # ADAPTIVE THRESHOLD — Epic 5 US-5.4 (2026-04-27).
+      # Rule fires when current p95 exceeds same-hour baseline (7d ago,
+      # ±1h window) by more than 3 standard deviations, OR exceeds the
+      # 1000 ms static floor when no baseline history is available.
+      # See decisions-log.html#d17 for the philosophy + tradeoffs.
       - uid: high-p95-latency
         title: HighP95Latency
         condition: C
@@ -33,7 +38,14 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000'
+              expr: |
+                (histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000)
+                -
+                (
+                  avg_over_time((histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000)[1h:1m] offset 7d)
+                  + 3 * stddev_over_time((histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000)[1h:1m] offset 7d)
+                  or vector(1000)
+                )
               instant: false
               range: true
               intervalMs: 15000
@@ -54,7 +66,7 @@ groups:
               conditions:
                 - evaluator:
                     type: gt
-                    params: [1000]
+                    params: [0]
         noDataState: OK
         execErrState: Error
         for: 2m
@@ -64,11 +76,14 @@ groups:
           signal: metric
           component: api
           timeframe: 10m
+          adaptive_threshold: "true"
         annotations:
           expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000'
-          summary: "P95 request latency exceeds 1s"
-          description: "The 95th percentile latency for Spring Boot requests has been above 1000ms for 2 minutes."
+          summary: "P95 request latency above adaptive baseline"
+          description: "Spring Boot p95 latency exceeds the same-hour 7-day baseline by more than 3σ, or 1000ms if no baseline history is available. Adaptive threshold reduces false positives during off-hours and traffic-driven spikes."
 
+      # ADAPTIVE THRESHOLD — Epic 5 US-5.4 (2026-04-27).
+      # Mirror of HighP95Latency but on the kong gateway-layer histogram.
       - uid: high-kong-p95-latency
         title: HighKongP95Latency
         condition: C
@@ -76,7 +91,14 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: 'histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))'
+              expr: |
+                histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))
+                -
+                (
+                  avg_over_time(histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))[1h:1m] offset 7d)
+                  + 3 * stddev_over_time(histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))[1h:1m] offset 7d)
+                  or vector(1000)
+                )
               instant: false
               range: true
               intervalMs: 15000
@@ -97,7 +119,7 @@ groups:
               conditions:
                 - evaluator:
                     type: gt
-                    params: [1000]
+                    params: [0]
         noDataState: OK
         execErrState: Error
         for: 2m
@@ -107,10 +129,11 @@ groups:
           signal: metric
           component: gateway
           timeframe: 10m
+          adaptive_threshold: "true"
         annotations:
           expr: 'histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))'
-          summary: "P95 Kong request latency exceeds 1s"
-          description: "The 95th percentile end-to-end latency measured at Kong has been above 1000ms for 2 minutes."
+          summary: "P95 Kong latency above adaptive baseline"
+          description: "Kong p95 end-to-end latency exceeds the same-hour 7-day baseline by more than 3σ, or 1000ms if no baseline history is available."
 
       - uid: otel-collector-high-span-drop-rate
         title: OTelCollectorHighSpanDropRate
@@ -461,6 +484,10 @@ groups:
           summary: "Critical memory usage"
           description: "Memory usage has exceeded 95%. OOM risk."
 
+      # ADAPTIVE THRESHOLD — Epic 5 US-5.4 (2026-04-27).
+      # CPU baseline is more seasonal than latency (3am idle vs 2pm peak),
+      # so the same-hour-7-days-ago + 3σ pattern is most valuable here.
+      # Static fallback floor: 80% (the prior MediumCpuUsage threshold).
       - uid: medium-cpu-usage
         title: MediumCpuUsage
         condition: C
@@ -468,7 +495,14 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
+              expr: |
+                (100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100))
+                -
+                (
+                  avg_over_time((100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100))[1h:1m] offset 7d)
+                  + 3 * stddev_over_time((100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100))[1h:1m] offset 7d)
+                  or vector(80)
+                )
               instant: false
               range: true
               intervalMs: 15000
@@ -489,7 +523,7 @@ groups:
               conditions:
                 - evaluator:
                     type: gt
-                    params: [80]
+                    params: [0]
         noDataState: OK
         execErrState: Error
         for: 1m
@@ -499,10 +533,11 @@ groups:
           signal: metric
           component: infrastructure
           timeframe: 5m
+          adaptive_threshold: "true"
         annotations:
           expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
-          summary: "Medium CPU usage"
-          description: "CPU usage has been above 80% for 1 minute."
+          summary: "CPU usage above adaptive baseline"
+          description: "Per-instance CPU exceeds same-hour 7-day baseline by more than 3σ, or 80% if no baseline history is available. Adapts to traffic seasonality (3am vs 2pm baselines differ)."
 
       - uid: medium-memory-usage
         title: MediumMemoryUsage
