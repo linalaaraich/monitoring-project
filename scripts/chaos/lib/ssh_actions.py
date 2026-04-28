@@ -110,11 +110,25 @@ async def k3s_rollout_status(deploy: str, namespace: str, timeout_s: int = 90) -
 
 
 async def k3s_get_pod_for_deploy(deploy: str, namespace: str) -> str | None:
-    """Return the first pod name matching app=<deploy> in the namespace."""
-    res = await k3s_kubectl(
-        f"get pods -n {namespace} -l app={deploy} --no-headers -o custom-columns=NAME:.metadata.name | head -1"
-    )
-    return res.stdout.strip() or None
+    """Return the first Running pod name matching the deployment in the namespace.
+
+    Tries the standard helm/k8s label first (app.kubernetes.io/name=<deploy>)
+    and falls back to the simpler app=<deploy> shape. Picks Running pods only
+    to avoid grabbing a Terminating pod mid-rollout.
+    """
+    selectors = [
+        f"app.kubernetes.io/name={deploy}",
+        f"app={deploy}",
+    ]
+    for sel in selectors:
+        res = await k3s_kubectl(
+            f"get pods -n {namespace} -l {sel} --field-selector=status.phase=Running "
+            f"--no-headers -o custom-columns=NAME:.metadata.name | head -1"
+        )
+        name = res.stdout.strip()
+        if name:
+            return name
+    return None
 
 
 async def k3s_exec_in_pod(pod: str, namespace: str, cmd: str, timeout_s: float = 30.0) -> SshResult:

@@ -39,8 +39,15 @@ class HighMemoryUsageTest(ChaosTest):
         logger.info("setup: captured memory limit = %r", self._original_limit)
 
     async def induce(self) -> None:
-        logger.info("induce: lowering spring-boot memory limit to 384Mi")
-        res = await k3s_set_resources("spring-boot", "app", limits="memory=384Mi")
+        # Both --limits AND --requests must be lowered together — kubectl
+        # rejects a patch that leaves request > limit. The first run
+        # 2026-04-28 11:38 hit this exact validation error.
+        logger.info("induce: lowering spring-boot memory limit + request to 384Mi/256Mi")
+        res = await k3s_set_resources(
+            "spring-boot", "app",
+            limits="memory=384Mi",
+            requests="memory=256Mi",
+        )
         if not res.ok:
             raise RuntimeError(f"kubectl set resources failed: {res.stderr}")
         # Force the change to take effect by rolling. The new pod will
@@ -49,8 +56,16 @@ class HighMemoryUsageTest(ChaosTest):
 
     async def teardown(self) -> None:
         limit = getattr(self, "_original_limit", "1Gi")
-        logger.info("teardown: restoring spring-boot memory limit to %s", limit)
-        res = await k3s_set_resources("spring-boot", "app", limits=f"memory={limit}")
+        logger.info("teardown: restoring spring-boot memory limit to %s + request to 512Mi", limit)
+        # Restore both limit AND request so the deployment is healthy. The
+        # original request value isn't captured (would need a second
+        # jsonpath lookup) so we set a conservative 512Mi which fits under
+        # any reasonable limit ≥ 512Mi.
+        res = await k3s_set_resources(
+            "spring-boot", "app",
+            limits=f"memory={limit}",
+            requests="memory=512Mi",
+        )
         if not res.ok:
             logger.error("teardown set-resources failed: %s", res.stderr)
             return
