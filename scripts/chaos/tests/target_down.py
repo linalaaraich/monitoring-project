@@ -34,24 +34,28 @@ class TargetDownTest(ChaosTest):
         return None
 
     async def induce(self) -> None:
-        pod = await k3s_get_pod_for_deploy("spring-boot", "app")
-        if not pod:
-            raise RuntimeError("No spring-boot pod found")
-        logger.info("induce: kill -TERM 1 inside %s", pod)
-        # `kill 1` on PID 1 in a container terminates the container, k8s
-        # then creates a fresh one (RESTARTS counter increments). The 30s
-        # gap between old-pod-down and new-pod-ready is what TargetDown
-        # detects. Some shells don't have `kill` builtin so use the
-        # explicit /bin/kill path; fallback to /usr/bin/kill if absent.
-        res = await k3s_exec_in_pod(
-            pod, "app",
-            "kill -TERM 1 || /bin/kill -TERM 1 || /usr/bin/kill -TERM 1",
-            timeout_s=15,
-        )
-        # Don't fail on kill exec — the connection drops as soon as PID 1
-        # dies, which surfaces as a non-zero exit code from kubectl exec.
-        # That's expected.
-        logger.info("induce: kill issued (rc=%s, stderr=%r)", res.rc, res.stderr[:80])
+        # V4 (2026-04-28 PM): single kill produced only ~30-60s of downtime,
+        # but TargetDown rule has `for: 2m`. Need sustained downtime. Loop:
+        # kill PID 1, wait 25s, kill the new pod's PID 1, wait 25s, etc.
+        # for 4 iterations = ~140s of cumulative downtime which beats the
+        # 2m for-clause. Each kill triggers a new pod creation; we re-fetch
+        # the pod name each iteration.
+        import asyncio as _asyncio
+        for attempt in range(1, 5):  # 4 kills × ~30s each ≈ 120s
+            pod = await k3s_get_pod_for_deploy("spring-boot", "app")
+            if not pod:
+                logger.info("induce: no pod (attempt %d) — waiting", attempt)
+                await _asyncio.sleep(15)
+                continue
+            logger.info("induce: kill -TERM 1 attempt %d inside %s", attempt, pod)
+            res = await k3s_exec_in_pod(
+                pod, "app",
+                "kill -TERM 1 || /bin/kill -TERM 1 || /usr/bin/kill -TERM 1",
+                timeout_s=15,
+            )
+            logger.info("induce: kill #%d issued (rc=%s)", attempt, res.rc)
+            if attempt < 4:
+                await _asyncio.sleep(25)
 
     async def teardown(self) -> None:
         logger.info("teardown: wait for spring-boot to be ready again")
