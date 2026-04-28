@@ -538,6 +538,14 @@ groups:
           expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
           summary: "CPU usage above adaptive baseline"
           description: "Per-instance CPU exceeds same-hour 7-day baseline by more than 3σ, or 80% if no baseline history is available. Adapts to traffic seasonality (3am vs 2pm baselines differ)."
+          # US-5.8 recurrence-gate opt-in. Warning-severity rule with a known
+          # noise profile — first 4 fires inside 2h are gated pre-LLM (no
+          # email), and if the LLM dismisses the same fingerprint twice in
+          # the window the next dismiss is force-flipped to ESCALATE so a
+          # human can decide whether the rule is too noisy or there's a
+          # real signal the LLM missed. CRITICAL-severity rules MUST NOT
+          # carry this annotation. See decisions-log D21.
+          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
 
       - uid: medium-memory-usage
         title: MediumMemoryUsage
@@ -581,6 +589,8 @@ groups:
           expr: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
           summary: "Medium memory usage"
           description: "Memory usage is above 80% for 1 minute."
+          # US-5.8 recurrence-gate opt-in (warning-severity, see D21).
+          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
 
       - uid: target-down
         title: TargetDown
