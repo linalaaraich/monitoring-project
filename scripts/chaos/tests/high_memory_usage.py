@@ -39,20 +39,36 @@ class HighMemoryUsageTest(ChaosTest):
         logger.info("setup: captured memory limit = %r", self._original_limit)
 
     async def induce(self) -> None:
-        # Both --limits AND --requests must be lowered together — kubectl
-        # rejects a patch that leaves request > limit. The first run
-        # 2026-04-28 11:38 hit this exact validation error.
-        logger.info("induce: lowering spring-boot memory limit + request to 384Mi/256Mi")
+        # V3 (2026-04-28 13:00 PM): drop the limit further AND pair with
+        # in-pod synthetic load. V2's 384Mi limit + idle JVM landed at
+        # only ~250Mi (65% utilisation) — below the alert threshold.
+        # 256Mi forces the JVM to bump against the cgroup; the curl loop
+        # generates real request work that allocates objects on the heap.
+        logger.info("induce: lowering spring-boot memory limit + request to 256Mi/192Mi")
         res = await k3s_set_resources(
             "spring-boot", "app",
-            limits="memory=384Mi",
-            requests="memory=256Mi",
+            limits="memory=256Mi",
+            requests="memory=192Mi",
         )
         if not res.ok:
             raise RuntimeError(f"kubectl set resources failed: {res.stderr}")
         # Force the change to take effect by rolling. The new pod will
         # boot under the tight limit and quickly exceed the alert threshold.
         await k3s_rollout_restart("spring-boot", "app")
+        # Generate synthetic load so heap pressure is real. Kong front-door
+        # at NodePort 30080. Loop fires concurrent requests in background
+        # so the test continues without blocking.
+        from ..lib.ssh_actions import ssh_exec, K3S_HOST, K3S_USER
+        load_cmd = (
+            "for i in $(seq 1 600); do "
+            "(curl -s -o /dev/null -m 3 http://localhost:30080/api/employees &); "
+            "(curl -s -o /dev/null -m 3 http://localhost:30080/api/employees &); "
+            "(curl -s -o /dev/null -m 3 http://localhost:30080/api/employees &); "
+            "sleep 0.3; "
+            "done > /dev/null 2>&1 &"
+        )
+        await ssh_exec(K3S_HOST, K3S_USER, load_cmd, timeout_s=10)
+        logger.info("induce: started 3-concurrent curl loop against /api/employees for ~3 min")
 
     async def teardown(self) -> None:
         limit = getattr(self, "_original_limit", "1Gi")

@@ -32,29 +32,38 @@ class Drain3AnomalyTest(ChaosTest):
     timeout_s = 360  # Drain3 polls every 30s; alert needs ≥20 lines + 2% rate
 
     async def setup(self) -> None:
-        # Generate a unique sentinel string so the template is guaranteed novel
-        # (contains the timestamp). Drain3 collapses similar messages into one
-        # cluster, so we only need one shape — repeated 50 times to push the
-        # batch's anomaly rate above threshold.
+        # V2 (2026-04-28 PM): emit 5 DISTINCT novel templates × 6 each
+        # instead of 50× one template. V1 collapsed to one cluster after
+        # the first few lines, so per-batch anomaly rate stayed at 0.47%
+        # — below the 2% threshold. 5 distinct shapes mean 5 new
+        # clusters, all flagged anomalous; 30 lines / batch is enough to
+        # cross the 2% rate threshold.
         self._sentinel = f"chaos-{int(time.time())}"
-        self._template_phrase = (
-            f"ERROR ChaosTest {self._sentinel}: simulated novel failure mode at "
-            f"OrderService.injectedFault — synthetic anomaly for chaos audit"
-        )
+        self._templates = [
+            f"ERROR {self._sentinel}-A: JDBC connection pool exhausted at OrderService.findByDate",
+            f"WARN {self._sentinel}-B: GC overhead limit exceeded after 3500ms in heap",
+            f"ERROR {self._sentinel}-C: Unsupported JSON token in payload at /api/employees/import",
+            f"FATAL {self._sentinel}-D: Liquibase migration v3.4.7 failed: relation already exists",
+            f"ERROR {self._sentinel}-E: Tomcat thread pool reached maxThreads=200 — rejecting requests",
+        ]
 
     async def induce(self) -> None:
         pod = await k3s_get_pod_for_deploy("spring-boot", "app")
         if not pod:
             raise RuntimeError("No spring-boot pod found")
-        logger.info("induce: emitting 50 lines of novel template to %s stdout", pod)
-        # Write 50 copies to /proc/1/fd/1 (the pod's PID 1 stdout, which is
-        # what Promtail tails). Use a single shell loop so it's one exec call.
-        cmd = (
-            f"i=0; while [ $i -lt 50 ]; do "
-            f"echo '{self._template_phrase} attempt='$i >> /proc/1/fd/1; "
-            f"i=$((i+1)); done; echo wrote 50 lines"
+        logger.info(
+            "induce: emitting 30 lines (5 templates × 6) of novel content to %s stdout",
+            pod,
         )
-        res = await k3s_exec_in_pod(pod, "app", cmd, timeout_s=15)
+        # 6 reps per template so Drain3 has multiple samples to confirm
+        # the cluster shape, but each TEMPLATE is unique so they don't
+        # collapse together.
+        loop_body = ""
+        for tpl in self._templates:
+            # Single quotes around tpl, escaped with shell concatenation.
+            loop_body += f"for i in 1 2 3 4 5 6; do echo '{tpl} attempt='$i >> /proc/1/fd/1; done; "
+        cmd = loop_body + "echo wrote 30 lines"
+        res = await k3s_exec_in_pod(pod, "app", cmd, timeout_s=20)
         if not res.ok:
             raise RuntimeError(f"log injection failed: {res.stderr}")
 

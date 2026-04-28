@@ -39,10 +39,18 @@ class HighCpuUsageTest(ChaosTest):
         pod = await k3s_get_pod_for_deploy("spring-boot", "app")
         if not pod:
             raise RuntimeError("No spring-boot pod found")
-        logger.info("induce: spawning 4 CPU-burner processes in %s", pod)
-        # Spawn 4 yes loops; nohup + & detaches them from the kubectl exec
-        # session so they keep running after the exec returns.
-        cmd = "for i in 1 2 3 4; do nohup yes > /dev/null 2>&1 & done; sleep 1; echo started"
+        # V3 (2026-04-28 PM): spawn 16 burners (was 4). The k3s node has
+        # 4 CPU cores, so 4 burners only saturated the spring-boot pod's
+        # CPU share but produced ~25% node CPU overall — below the
+        # HighCpuUsage threshold which evaluates per node, not per pod.
+        # 16 burners blast through the pod's cgroup limit and pin all 4
+        # node cores at 100%.
+        N = 16
+        logger.info("induce: spawning %d CPU-burner processes in %s", N, pod)
+        cmd = (
+            f"for i in $(seq 1 {N}); do "
+            "nohup yes > /dev/null 2>&1 & done; sleep 1; echo started"
+        )
         res = await k3s_exec_in_pod(pod, "app", cmd, timeout_s=15)
         if not res.ok:
             raise RuntimeError(f"kubectl exec failed: {res.stderr}")
