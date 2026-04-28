@@ -289,8 +289,6 @@ def render_html_report(results: list[ChaosResult], started_at: str) -> str:
 <body>
 <nav class="topnav">
   <a href="index.html">🏠 Home</a>
-  <a href="rca-quality-audit-2026-04-28.html">📋 RCA Audit</a>
-  <a href="audit-2026-04-28.html">📋 Sweep audit</a>
   <a href="decisions-log.html">📝 Decisions Log</a>
 </nav>
 <section class="hero">
@@ -310,7 +308,7 @@ def render_html_report(results: list[ChaosResult], started_at: str) -> str:
 <div class="footer">
   Tests live at <code>monitoring-project/scripts/chaos/tests/</code>.
   Run <code>./scripts/chaos/runner.py --tests &lt;short_names&gt;</code> from the controller.
-  See <a href="rca-quality-audit-2026-04-28.html" style="color:#4ea8de;">RCA Quality Audit</a> for the failure-mode taxonomy these tests measure against.
+  Failure-mode taxonomy lives in the private <code>monitoring-audit-results</code> repo (manual RCA quality audits).
 </div>
 </body></html>
 """
