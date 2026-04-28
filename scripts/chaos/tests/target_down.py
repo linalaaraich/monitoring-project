@@ -28,7 +28,9 @@ class TargetDownTest(ChaosTest):
     name = "TargetDown — spring-boot PID 1 killed"
     description = "kubectl exec into spring-boot and kill PID 1; pod restarts; up=0 during the gap → TargetDown fires."
     expected_alertname = "TargetDown"
-    timeout_s = 360
+    timeout_s = 600  # Bumped 360→600s 2026-04-28 PM: chaos run 3 saw the alert
+                     # fire ~5min after the 360s window expired (k8s pod recovery
+                     # takes longer than the rule's `for: 2m` is designed for).
 
     async def setup(self) -> None:
         return None

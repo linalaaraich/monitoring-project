@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 class HighCpuUsageTest(ChaosTest):
-    name = "HighCpuUsage — spring-boot CPU saturation"
-    description = "Spawns 4× `yes > /dev/null` inside spring-boot to drive CPU utilisation high."
-    expected_alertname = "HighCpuUsage"
+    name = "PodHighCpuUsage — spring-boot pod cgroup quota saturation"
+    description = "Spawns N× `yes > /dev/null` inside spring-boot to drive container_cpu_usage_seconds_total above 80% of the pod's CPU quota."
+    expected_alertname = "PodHighCpuUsage"
     timeout_s = 480
 
     async def setup(self) -> None:

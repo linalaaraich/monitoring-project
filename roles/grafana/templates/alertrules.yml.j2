@@ -679,6 +679,119 @@ groups:
           description: "Based on the last 6 hours of data, the root filesystem is predicted to run out of space within 24 hours."
 
   - orgId: 1
+    name: kubernetes_alerts
+    folder: Provisioned Alerts
+    interval: 60s
+    rules:
+      # Pod-level memory pressure (added 2026-04-28 PM after chaos run 3
+      # found 0/4 captures — the host-level HighMemoryUsage rule above
+      # measures node_memory_*, not the per-pod cgroup, so pod-scoped
+      # chaos like `kubectl set resources --limits memory=256Mi` never
+      # moves the host metric. This rule measures the working set against
+      # the pod's own cgroup limit, which is what an operator actually
+      # cares about for "is my service's container approaching OOM".
+      - uid: pod-high-memory-usage
+        title: PodHighMemoryUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (
+                  container_memory_working_set_bytes{namespace="app",container="spring-boot"}
+                  /
+                  container_spec_memory_limit_bytes{namespace="app",container="spring-boot"}
+                ) * 100
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: warning
+          service: spring-boot
+          signal: metric
+          component: pod
+          timeframe: 10m
+        annotations:
+          expr: '(container_memory_working_set_bytes{namespace="app",container="spring-boot"} / container_spec_memory_limit_bytes{namespace="app",container="spring-boot"}) * 100'
+          summary: "Spring Boot pod memory above 85% of cgroup limit"
+          description: "spring-boot pod working-set memory has been above 85% of its cgroup limit for 2m. Risk of imminent OOMKill. Check JVM heap (Micrometer jvm_memory_used_bytes) and pod resource requests/limits."
+
+      # Pod-level CPU pressure. Same rationale as PodHighMemoryUsage:
+      # the host-level HighCpuUsage rule averages across the whole node,
+      # so pod-scoped chaos can saturate one container's cgroup without
+      # moving the node average. This rule measures pod CPU usage as a
+      # fraction of its CPU quota.
+      - uid: pod-high-cpu-usage
+        title: PodHighCpuUsage
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (
+                  rate(container_cpu_usage_seconds_total{namespace="app",container="spring-boot"}[5m])
+                  /
+                  (container_spec_cpu_quota{namespace="app",container="spring-boot"} / container_spec_cpu_period{namespace="app",container="spring-boot"})
+                ) * 100
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: warning
+          service: spring-boot
+          signal: metric
+          component: pod
+          timeframe: 10m
+        annotations:
+          expr: '(rate(container_cpu_usage_seconds_total{namespace="app",container="spring-boot"}[5m]) / (container_spec_cpu_quota{namespace="app",container="spring-boot"} / container_spec_cpu_period{namespace="app",container="spring-boot"})) * 100'
+          summary: "Spring Boot pod CPU above 80% of cgroup quota"
+          description: "spring-boot pod CPU usage has been above 80% of its cgroup CPU quota for 2m. Likely throttling on the cgroup. Investigate hot endpoints (HTTP request rate per URI), JVM threads, GC pressure."
+
+  - orgId: 1
     name: log_alerts
     folder: Provisioned Alerts
     interval: 60s

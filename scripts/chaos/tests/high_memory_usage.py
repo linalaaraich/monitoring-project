@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 class HighMemoryUsageTest(ChaosTest):
-    name = "HighMemoryUsage — spring-boot limit lowered to 384Mi"
-    description = "Reduces spring-boot's memory limit so the JVM's natural footprint pushes utilisation above the alert threshold."
-    expected_alertname = "HighMemoryUsage"
+    name = "PodHighMemoryUsage — spring-boot pod cgroup pressure"
+    description = "Reduces spring-boot's memory limit so the JVM's natural footprint pushes the pod's container_memory_working_set / container_spec_memory_limit ratio above 85%."
+    expected_alertname = "PodHighMemoryUsage"
     timeout_s = 600
 
     async def setup(self) -> None:
