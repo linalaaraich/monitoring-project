@@ -67,9 +67,16 @@
   vars:
     laptop_smtp_password: "{{ _effective_smtp_password }}"
 
-- name: Docker compose — pull latest images
+- name: Docker compose — pull latest triage image
+  # Only pull the triage-service image, not the whole stack. The
+  # cires/mcp-* images are locally built (laptop-dev tag) and have no
+  # registry to pull from — `docker compose pull` (no service arg)
+  # would fail with "pull access denied" on those. Fixed 2026-04-28
+  # (audit I-6) after a real ansible run hit this footgun. Operators
+  # who genuinely need to pull MCP images should rebuild them locally
+  # via the relevant per-MCP make target.
   ansible.builtin.shell:
-    cmd: docker compose pull
+    cmd: docker compose pull triage-service
     chdir: "{{ laptop_compose_dir }}"
   when: laptop_compose_pull | bool
   changed_when: true
