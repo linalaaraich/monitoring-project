@@ -85,6 +85,20 @@ Phase 2: wire to `/schedule` (Claude Code routine) for weekly cron. The longitud
 
 Phase 3 (paired with US-5.7 corpus): each chaos test's expected RCA shape lands in `tests/corpus/` as a labeled example. F1 gates on chaos report regression in CI.
 
+## Known test design issues (2026-04-28 first runs)
+
+The harness is solid; the inducers need iteration. Issues found in the first two live runs:
+
+| Test | Issue | Status / next iteration |
+|---|---|---|
+| `target_down` (v1) | `kubectl scale --replicas=0` removes the pod from Prometheus SD entirely — no `up` series, so `up==0` rule never fires. | v2 patches `readinessProbe` to a 404 path. |
+| `target_down` (v2) | Pod stays in SD but k8s rolling-update keeps the OLD pod serving while the NEW pod fails ready, so up=1 from the old pod. | **Next iteration**: induce by `kubectl exec spring-boot 'kill 1'` — sends SIGTERM to PID 1 inside the running pod, brief downtime should trigger TargetDown. |
+| `high_memory` (v1) | `kubectl set --limits=memory=384Mi` rejected because requests was still 1Gi (must be ≤ limit). | v2 sets both limits AND requests in one patch. |
+| `high_memory` (v2) | Spring-boot at idle uses ~250Mi out of 384Mi cap = 65% — below the alert threshold. | **Next iteration**: pair the limit drop with synthetic load (`hey -n 10000 -c 50 http://kong:30080/api/employees`) OR drop the limit further (300Mi). |
+| `high_cpu` + `drain3_anomaly` | `k3s_get_pod_for_deploy` queried `app=<deploy>` but the actual label on helm-deployed pods is `app.kubernetes.io/name=<deploy>`. | Fixed: helper tries the helm label first, falls back to the simple `app=` form. |
+
+Next chaos run after the iterations above will produce real captured RCAs that the scorer can grade. The harness — pre-flight, sequential teardown-always, JSON + HTML report — works correctly; what needs work is the chaos induction itself.
+
 ## Why this exists
 
 The 2026-04-28 RCA quality audit (`monitoring-docs/rca-quality-audit-2026-04-28.html`) catalogued 5 distinct failure modes the production triage falls into. The morning's three-surface intervention (system prompt + exemplars + validator) addressed F-2 partially; the F-1 fix (Drain3 webhook evidence flow) addressed the dominant data-layer bug. But every fix so far was validated against either the test suite or one captured production case. Without live chaos:
