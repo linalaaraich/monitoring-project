@@ -133,3 +133,20 @@
         status_code: [200, 204]
       ignore_errors: true
       tags: [prometheus]
+
+    # ---------------------------------------------------------------
+    # node-exporter DaemonSet (audit I-2, 2026-04-28)
+    #
+    # Closes the host-level metrics gap on the k3s node. Discovered by the
+    # existing kubernetes-pods scrape job via prometheus.io/scrape annotations
+    # (proxied through the k3s API server) — no prometheus.yml.j2 changes
+    # required.
+    # ---------------------------------------------------------------
+    - name: Apply node-exporter DaemonSet (k3s host metrics)
+      command: kubectl apply -f {{ manifests_dir }}/node-exporter/daemonset.yaml
+      tags: [node-exporter]
+
+    - name: Wait for node-exporter DaemonSet to roll out
+      command: kubectl rollout status daemonset/node-exporter -n observability --timeout=90s
+      changed_when: false
+      tags: [node-exporter]

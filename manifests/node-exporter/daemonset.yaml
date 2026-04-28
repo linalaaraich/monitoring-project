@@ -1,0 +1,122 @@
+---
+# node-exporter DaemonSet — host-level metrics for the k3s node (audit I-2,
+# 2026-04-28). The 2026-04-28 audit found that the k3s host has no
+# node-exporter, so HighCpuUsage / CriticalDiskUsage / HighMemoryUsage
+# alerts only ever fire for the monitoring VM. This DaemonSet closes that
+# gap by running prom/node-exporter on every k3s node.
+#
+# Discovery: Prometheus's `kubernetes-pods` scrape job (in
+# roles/prometheus/templates/prometheus.yml.j2) uses k8s service-discovery
+# with the prometheus.io/scrape annotation, proxying through the k3s API
+# server. No changes to prometheus.yml.j2 are required — the annotations
+# below are sufficient for the existing job to pick this up automatically.
+#
+# Survives node reboots and k3s pod churn; no host-level installs needed.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: node-exporter
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/part-of: cires-observability
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-exporter
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: node-exporter
+        app.kubernetes.io/component: metrics
+      annotations:
+        # Picked up by Prometheus's kubernetes-pods SD job via API-server proxy
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+        prometheus.io/path: "/metrics"
+    spec:
+      hostNetwork: true
+      hostPID: true
+      # The k3s node is control-plane only (single-node cluster). Without
+      # these tolerations the DaemonSet won't schedule.
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        # Schedule on any node that's marked NoSchedule for any reason
+        - operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.8.2
+          args:
+            - "--path.procfs=/host/proc"
+            - "--path.sysfs=/host/sys"
+            - "--path.rootfs=/host/rootfs"
+            - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)"
+            - "--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
+          ports:
+            - name: metrics
+              containerPort: 9100
+              hostPort: 9100
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: rootfs
+              mountPath: /host/rootfs
+              readOnly: true
+              mountPropagation: HostToContainer
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9100
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9100
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: rootfs
+          hostPath:
+            path: /
