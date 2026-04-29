@@ -1,0 +1,56 @@
+[
+  {
+    "test_name": "PodHighMemoryUsage \u2014 spring-boot pod cgroup pressure",
+    "test_short": "high_memory",
+    "expected_alertname": "PodHighMemoryUsage",
+    "started_at": "2026-04-28T15:32:45.088344+00:00",
+    "duration_s": 672.76,
+    "decision_id": null,
+    "rca_text": null,
+    "verdict": null,
+    "confidence": "",
+    "rca_quality": null,
+    "suggested_actions": [],
+    "evidence": [],
+    "score_cause_first": 0.0,
+    "score_named_cause": 0.0,
+    "score_specific_evidence": 0.0,
+    "score_state_changing": 0.0,
+    "score_total": 0.0,
+    "score_grade": "F",
+    "score_notes": [
+      "No decision captured \u2014 score N/A"
+    ],
+    "setup_ok": true,
+    "induce_ok": true,
+    "teardown_ok": true,
+    "error": "no /decisions row matched PodHighMemoryUsage within 600s"
+  },
+  {
+    "test_name": "PodHighCpuUsage \u2014 spring-boot pod cgroup quota saturation",
+    "test_short": "high_cpu",
+    "expected_alertname": "PodHighCpuUsage",
+    "started_at": "2026-04-28T15:44:27.877955+00:00",
+    "duration_s": 550.1,
+    "decision_id": null,
+    "rca_text": null,
+    "verdict": null,
+    "confidence": "",
+    "rca_quality": null,
+    "suggested_actions": [],
+    "evidence": [],
+    "score_cause_first": 0.0,
+    "score_named_cause": 0.0,
+    "score_specific_evidence": 0.0,
+    "score_state_changing": 0.0,
+    "score_total": 0.0,
+    "score_grade": "F",
+    "score_notes": [
+      "No decision captured \u2014 score N/A"
+    ],
+    "setup_ok": true,
+    "induce_ok": true,
+    "teardown_ok": true,
+    "error": "no /decisions row matched PodHighCpuUsage within 480s"
+  }
+]
