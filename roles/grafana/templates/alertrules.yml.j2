@@ -81,6 +81,13 @@ groups:
           expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000'
           summary: "P95 request latency above adaptive baseline"
           description: "Spring Boot p95 latency exceeds the same-hour 7-day baseline by more than 3σ, or 1000ms if no baseline history is available. Adaptive threshold reduces false positives during off-hours and traffic-driven spikes."
+          # P2 fix (2026-05-19) — recurrence-gate opt-in.
+          # Warning-severity (severity: warning above) and historically
+          # prone to dismiss-cascades during traffic-driven spikes. The
+          # post-LLM gate force-escalates after 2 dismisses in a 2h
+          # window so a cascade can't silence a sustained real latency
+          # regression. See decisions-log D21.
+          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
 
       # ADAPTIVE THRESHOLD — Epic 5 US-5.4 (2026-04-27).
       # Mirror of HighP95Latency but on the kong gateway-layer histogram.
@@ -134,6 +141,12 @@ groups:
           expr: 'histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))'
           summary: "P95 Kong latency above adaptive baseline"
           description: "Kong p95 end-to-end latency exceeds the same-hour 7-day baseline by more than 3σ, or 1000ms if no baseline history is available."
+          # P2 fix (2026-05-19) — recurrence-gate opt-in.
+          # Warning-severity (severity: warning above). Force-escalates
+          # after 2 LLM dismisses in a 2h window so a cascade of
+          # "looks like a spike" dismisses can't silence a sustained
+          # gateway-layer latency regression. See decisions-log D21.
+          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
 
       - uid: otel-collector-high-span-drop-rate
         title: OTelCollectorHighSpanDropRate
