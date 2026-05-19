@@ -1,0 +1,20 @@
+{
+  "_corpus_meta": {
+    "id": "oom-loop-spring-boot",
+    "expected_grade": "A",
+    "narrative": "Canonical good OOM RCA. Cause-first lede ('JVM heap saturating cgroup limit'), named-cause (heap + cgroup), specific evidence (saw-tooth peaks, restart count, GC pause climb), state-changing actions (kubectl set resources / set env / rollout restart). Archetype match: alert is HighMemoryUsage so memory-vocab keywords (oom, heap, cgroup) are expected — and present."
+  },
+  "alert_name": "HighMemoryUsage",
+  "affected_service": "spring-boot",
+  "severity": "critical",
+  "llm_verdict": "ESCALATE",
+  "llm_confidence": "0.92",
+  "rca_quality": "actionable",
+  "rca_report": "spring-boot is in an OOM-kill loop because the JVM heap defaults to ~25% of the cgroup limit, so the 1 GiB container effectively has ~256 MB of heap which is exhausted under normal traffic. The kernel OOM-kills the container, the pod restarts, the cycle repeats every ~12 minutes. container_memory_working_set_bytes saw-toothed twice in the last 30 min, peaking at 940 MB; restart counter is +3 in 30 min. GC pause time grows in the 60-90s leading up to each crash. The pattern post-dates the 09:30 deploy of v1.4.7.",
+  "evidence": [
+    "[\"container_memory_working_set_bytes peaked at 940/1024 MB (~92%) twice in 30m\", \"kube_pod_container_status_restarts_total = 14 (+3 in last 30m)\", \"3x java.lang.OutOfMemoryError: Java heap space lines 12 minutes apart\", \"GC pause sum climbing in the 90 s before each OOM\"]"
+  ],
+  "suggested_actions": [
+    "[\"kubectl set resources deploy/spring-boot -n app --limits=memory=2Gi --requests=memory=1Gi\", \"kubectl set env deploy/spring-boot -n app JAVA_TOOL_OPTIONS='-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError'\", \"kubectl rollout restart deploy/spring-boot -n app\"]"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "_corpus_meta": {
+    "id": "0b215ef3-kong-p95-wrong-archetype",
+    "captured": "2026-04-29",
+    "expected_grade": "F",
+    "min_archetype_match": 0.0,
+    "max_archetype_match": 0.0,
+    "narrative": "HighKongP95Latency fired on the Kong gateway. The LLM produced an RCA that named memory pressure as the cause and recommended OOMKill remediations (kubectl set resources, JAVA_TOOL_OPTIONS, kubectl rollout restart). This is wrong-archetype: a p95 latency alert should not be answered with memory remediations. The pre-S3-HF-09 4-axis scorer rated this RCA acceptably (it had a named cause, state-changing actions, specific evidence). Axis 5 — archetype_match — is the regression guard that would have caught it. If this corpus entry ever scores above F, axis 5 has regressed and the firewall is broken."
+  },
+  "alert_name": "HighKongP95Latency",
+  "affected_service": "kong",
+  "severity": "warning",
+  "llm_verdict": "ESCALATE",
+  "llm_confidence": "0.40",
+  "rca_quality": "data_starved",
+  "rca_report": "Kong is hitting JVM heap pressure: container_memory_working_set_bytes peaked near the cgroup limit and we are seeing repeated OOM-kill cycles every ~12 minutes on the spring-boot upstream. The JVM heap defaults to ~25% of the cgroup so a 1GiB container only has ~256MB effective heap which is exhausted under normal traffic. GC overhead climbs in the 60-90s before each crash. The pattern post-dates the most recent deploy.",
+  "evidence": [
+    "[\"container_memory_working_set_bytes peaked at 940/1024 MB (~92%) twice in 30m\", \"kube_pod_container_status_restarts_total = 14 (+3 in last 30m)\", \"3x java.lang.OutOfMemoryError: Java heap space (Drain3 cluster #142)\", \"GC pause sum climbing in the 90s before each OOM\"]"
+  ],
+  "suggested_actions": [
+    "[\"kubectl set resources deploy/spring-boot -n app --limits=memory=2Gi --requests=memory=1Gi\", \"kubectl set env deploy/spring-boot -n app JAVA_TOOL_OPTIONS='-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError'\", \"kubectl rollout restart deploy/spring-boot -n app\"]"
+  ]
+}

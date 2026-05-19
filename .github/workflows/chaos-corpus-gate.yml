@@ -1,0 +1,46 @@
+name: chaos-corpus-gate
+
+# S3-HF-09 regression gate. Runs the chaos rca_scorer against a curated
+# corpus of known-good (expected_grade=A) and known-bad (expected_grade=F)
+# RCAs. Fails if any corpus fixture grades different from its expected
+# grade — that means either the scorer regressed (used to catch a bad RCA,
+# now passes it) or got over-strict (used to pass a good RCA, now fails it).
+#
+# The 0b215ef3 seed is the keystone: an alert/RCA mismatch that the pre-
+# S3-HF-09 4-axis scorer rated B but the 5-axis scorer must rate F. If
+# this gate ever stops failing 0b215ef3 as F, axis 5 (archetype_match)
+# has been weakened.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/chaos/lib/rca_scorer.py"
+      - "scripts/chaos/corpus/**"
+      - "scripts/chaos/test_corpus_regression.py"
+      - ".github/workflows/chaos-corpus-gate.yml"
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  corpus-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test deps
+        run: pip install pytest
+
+      - name: Run corpus regression gate
+        working-directory: scripts/chaos
+        run: python -m pytest test_corpus_regression.py -v

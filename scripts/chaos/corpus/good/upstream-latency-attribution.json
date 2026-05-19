@@ -1,0 +1,20 @@
+{
+  "_corpus_meta": {
+    "id": "upstream-latency-attribution",
+    "expected_grade": "A",
+    "narrative": "Canonical good HighKongP95Latency RCA — Kong looks slow but actually it's a slow upstream MySQL query plan. The contrast with 0b215ef3-kong-p95-wrong-archetype is the point: SAME alert, but this RCA stays inside the latency vocabulary (slow query, query plan, missing index, connection pool) so axis 5 (archetype_match) scores 1.0. A latency RCA must not blame memory unless it can explicitly tie memory pressure to the latency mechanism."
+  },
+  "alert_name": "HighKongP95Latency",
+  "affected_service": "kong",
+  "severity": "warning",
+  "llm_verdict": "ESCALATE",
+  "llm_confidence": "0.94",
+  "rca_quality": "actionable",
+  "rca_report": "Kong itself is healthy — kong_proxy_latency_ms p95 is 4 ms (flat). The 2.31s p95 is upstream latency inside spring-boot, dominated by a single MySQL slow query against the orders table. Trace evidence consistently shows >95% of total latency in the MySQL child span. Likely cause: query plan regression — row count grew past 1M between 13:00 and 13:55, no recent schema change. Connection pool is healthy. Recommend EXPLAIN-ing the query and adding a covering index on (customer_id, created_at).",
+  "evidence": [
+    "[\"kong_proxy_latency_ms p95 = 4ms flat\", \"kong_http_request_duration_ms = 2310ms (arithmetic delta 2306ms is all upstream)\", \"every top-20 latency trace: kong span ~5ms, spring-boot span 2.2-2.4s\", \"MySQL child span dominates: SELECT ... FROM orders WHERE customer_id = ? AND created_at > ?\", \"orders row count grew past 1M between 13:00-13:55\"]"
+  ],
+  "suggested_actions": [
+    "[\"kubectl exec -n app sts/mysql -- mysql -e \\\"ALTER TABLE orders ADD INDEX idx_cust_created (customer_id, created_at)\\\"\", \"kubectl rollout restart deploy/spring-boot -n app\"]"
+  ]
+}

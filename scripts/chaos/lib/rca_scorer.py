@@ -1,10 +1,23 @@
-"""Score a captured RCA on four quality axes.
+"""Score a captured RCA on five quality axes.
 
 Each axis returns 0.0 (fail), 0.5 (partial), or 1.0 (clean pass).
-Total score is the mean across the four. The scorer is deliberately
+Total score is the mean across the five. The scorer is deliberately
 conservative — false-positive scoring (rating bad RCAs as good) would
 mask the regressions chaos tests are meant to catch, so when in doubt
 we score lower.
+
+Axes
+----
+  1. cause_first_lede     — first sentence names a cause, not the symptom
+  2. named_cause          — RCA prose mentions a specific component/mechanism
+  3. specific_evidence    — evidence list contains numbers/units/quoted strings
+  4. state_changing_action — first suggested action is a remediation verb
+  5. archetype_match      — RCA's named cause is plausible for THIS alert's
+                            archetype. The 0b215ef3 incident motivated this:
+                            HighKongP95Latency fired but the RCA recommended
+                            OOMKill remediations. The first four axes all
+                            scored well on that RCA; only archetype mismatch
+                            would have caught it. (S3-HF-09, 2026-05-19.)
 """
 from __future__ import annotations
 
@@ -50,6 +63,140 @@ _CAUSE_NAMING = re.compile(
     re.I,
 )
 
+# S3-HF-09 — archetype → expected cause-vocabulary map.
+#
+# For each alert archetype, what kinds of causes are PLAUSIBLE? The map is
+# deliberately permissive — every keyword that *could* legitimately appear in
+# an RCA for that alert. False positives (over-permissive matches) are still
+# caught by other axes; false negatives (under-permissive) would silently
+# pass wrong-archetype RCAs, which is the whole point of this axis.
+#
+# Match logic: alert.alertname → category → keyword set. RCA prose must
+# contain at least one keyword from the right set; otherwise axis 5 fails
+# with "cause vocabulary mismatch — RCA cites {found} but alert is {alert}".
+_ARCHETYPE_VOCAB: dict[str, set[str]] = {
+    # Latency-family alerts (Kong p95, service-self p95, error rate)
+    "latency": {
+        "slow query", "query plan", "missing index", "lock contention",
+        "synchronized", "mutex", "thread blocked", "gc pause", "gc overhead",
+        "connection pool", "pool exhausted", "hikaricp", "circuit breaker",
+        "upstream", "downstream", "p95", "p99", "latency", "tail latency",
+        "queue depth", "backpressure", "network delay", "rtt", "tcp retransmit",
+        "cold cache", "cache miss", "saturate", "saturation",
+    },
+    # Memory-family alerts (Heap, OOM, MemoryUsage)
+    "memory": {
+        "oom", "out of memory", "heap", "heap dump", "leak", "leaked",
+        "gc", "garbage collection", "young gen", "old gen", "g1", "cms",
+        "javaheap", "jvm", "cgroup", "memory limit", "rss", "working set",
+        "memory pressure", "page cache", "swap", "memory_limiter",
+    },
+    # CPU-family alerts
+    "cpu": {
+        "cpu", "load", "throttled", "throttle", "spike", "context switch",
+        "tight loop", "busy wait", "hot path", "deadlock", "lock contention",
+        "thread starvation",
+    },
+    # Disk / storage alerts
+    "disk": {
+        "disk", "fill", "filling", "storage", "wal", "log retention", "fsync",
+        "inode", "tmp", "compaction", "loki", "ingester", "chunks", "cardinality",
+    },
+    # Telemetry pipeline alerts
+    "telemetry": {
+        "otel", "collector", "queue", "span drop", "memory_limiter",
+        "batch processor", "exporter", "receiver", "pipeline", "telemetry",
+    },
+    # Target-down / reachability
+    "reachability": {
+        "down", "unreachable", "scrape", "timeout", "target down", "dns",
+        "resolution", "network policy", "security group", "firewall",
+        "tls", "certificate", "expiry", "expired", "rolling restart",
+        "kubelet", "node not ready", "draining",
+    },
+    # Log anomalies (Drain3)
+    "log": {
+        "novel template", "drain3", "log pattern", "regression", "deploy",
+        "new error", "first seen", "stack trace", "exception class",
+    },
+}
+
+# Map alertname regex → vocabulary category. Order matters: first match wins.
+_ALERTNAME_TO_CATEGORY = [
+    (re.compile(r".*P95Latency$|.*ErrorRate$|.*UpstreamErrorRate$", re.I), "latency"),
+    (re.compile(r".*MemoryUsage$|.*OOM.*", re.I), "memory"),
+    (re.compile(r".*CpuUsage$", re.I), "cpu"),
+    (re.compile(r".*DiskUsage$|.*DiskFillingUp$|.*IngestionRateLow$", re.I), "disk"),
+    (re.compile(r"^OTelCollector.*", re.I), "telemetry"),
+    (re.compile(r"^TargetDown$|.*Crash.*|.*Probe.*|.*TLS.*", re.I), "reachability"),
+    (re.compile(r"^Drain3.*", re.I), "log"),
+]
+
+
+def _alert_archetype(alertname: str) -> str | None:
+    for pattern, category in _ALERTNAME_TO_CATEGORY:
+        if pattern.match(alertname or ""):
+            return category
+    return None
+
+
+def _score_archetype_match(rca: str, alertname: str) -> tuple[float, str | None]:
+    """Score whether the RCA's dominant cause vocabulary matches the alert's.
+
+    Counts keyword hits per archetype across the whole RCA prose. The
+    dominant category is the one with the most hits. Decision:
+
+      1.0  — dominant category matches the alert's category, by a margin
+             of at least 2 keywords (so incidental latency-vocab words in
+             a memory RCA don't accidentally score it as latency).
+      0.5  — no clear winner / tie / no hits at all.
+      0.0  — dominant category is something OTHER than the alert's.
+             This is the 0b215ef3 smoking gun: alert was latency, RCA's
+             dominant vocab was memory.
+    """
+    category = _alert_archetype(alertname)
+    if category is None:
+        return 1.0, None
+    rca_lower = rca.lower()
+
+    counts: dict[str, int] = {}
+    for cat, vocab in _ARCHETYPE_VOCAB.items():
+        n = sum(1 for kw in vocab if kw in rca_lower)
+        if n:
+            counts[cat] = n
+
+    if not counts:
+        return 0.5, f"no archetype-vocab keywords found for {alertname} ({category})"
+
+    # Sort by hit count desc; in case of tie the alert's own category wins
+    # (tie-break toward the alert — gives the LLM the benefit of the doubt
+    # on close calls, but mismatches with a clear delta still fail).
+    sorted_cats = sorted(counts.items(), key=lambda kv: (-kv[1], 0 if kv[0] == category else 1))
+    dominant, dominant_count = sorted_cats[0]
+    expected_count = counts.get(category, 0)
+
+    if dominant == category and dominant_count >= 1:
+        return 1.0, None
+
+    # Wrong-archetype dominant. Two flavours of failure:
+    #   - hard miss (memory RCA on latency alert): 0.0
+    #   - close call (1 expected hit, 2 wrong-vocab hits): still 0.0 if the
+    #     wrong-vocab outweighs the right one
+    if dominant_count > expected_count:
+        # Most-cited vocab is the wrong category — flag it.
+        top_three = ", ".join(
+            f"{cat}={n}" for cat, n in sorted_cats[:3]
+        )
+        return 0.0, (
+            f"archetype mismatch — alert is {alertname} (vocab={category}, "
+            f"hits={expected_count}); RCA's dominant vocab is "
+            f"'{dominant}' ({dominant_count} hits). Counts: {top_three}"
+        )
+
+    # Tie with the right category in front already handled by the tie-break.
+    return 0.5, f"weak archetype match for {alertname} ({category}) — counts: {counts}"
+
+
 # Remediation verbs — same list as response_validator's _REMEDIATION_VERB_PATTERNS.
 _REMEDIATION_VERBS = re.compile(
     r"\b(?:kubectl\s+(?:rollout\s+(?:restart|undo)|scale|set\s+(?:resources|env|image)|patch|delete\s+pod|drain|cordon|edit|apply)|"
@@ -67,6 +214,7 @@ class QualityScore:
     named_cause: float
     specific_evidence: float
     state_changing_action: float
+    archetype_match: float
     notes: list[str]
 
     @property
@@ -76,10 +224,16 @@ class QualityScore:
             + self.named_cause
             + self.specific_evidence
             + self.state_changing_action
-        ) / 4
+            + self.archetype_match
+        ) / 5
 
     @property
     def grade(self) -> str:
+        # Veto: archetype_match=0 is a structural failure. The RCA didn't
+        # answer the question it was asked — no amount of polished prose
+        # or specific evidence saves it. Force F. (S3-HF-09 design.)
+        if self.archetype_match == 0.0:
+            return "F"
         t = self.total
         if t >= 0.85:
             return "A"
@@ -91,7 +245,7 @@ class QualityScore:
 
 
 def score_rca(decision: dict) -> QualityScore:
-    """Score a captured /decisions row on four axes."""
+    """Score a captured /decisions row on five axes."""
     notes: list[str] = []
 
     rca = (decision.get("rca_report") or "").strip()
@@ -172,10 +326,17 @@ def score_rca(decision: dict) -> QualityScore:
             state_changing = 0.0
             notes.append(f"First action is not a state-change verb: {first_action[:60]}")
 
+    # ---- Axis 5: archetype match (S3-HF-09) -----------------------------
+    alertname = decision.get("alert_name") or decision.get("alertname") or ""
+    archetype_match, archetype_note = _score_archetype_match(rca, alertname)
+    if archetype_note:
+        notes.append(archetype_note)
+
     return QualityScore(
         cause_first_lede=cause_first,
         named_cause=named_cause,
         specific_evidence=specific_evidence,
         state_changing_action=state_changing,
+        archetype_match=archetype_match,
         notes=notes,
     )
