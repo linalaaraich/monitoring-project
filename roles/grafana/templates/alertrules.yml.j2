@@ -712,9 +712,9 @@ groups:
             model:
               expr: |
                 (
-                  container_memory_working_set_bytes{namespace="app",container="spring-boot"}
+                  container_memory_working_set_bytes{namespace=~"app|rental",container=~"spring-boot|backend"}
                   /
-                  container_spec_memory_limit_bytes{namespace="app",container="spring-boot"}
+                  container_spec_memory_limit_bytes{namespace=~"app|rental",container=~"spring-boot|backend"}
                 ) * 100
               instant: false
               range: true
@@ -747,7 +747,7 @@ groups:
           component: pod
           timeframe: 10m
         annotations:
-          expr: '(container_memory_working_set_bytes{namespace="app",container="spring-boot"} / container_spec_memory_limit_bytes{namespace="app",container="spring-boot"}) * 100'
+          expr: '(container_memory_working_set_bytes{namespace=~"app|rental",container=~"spring-boot|backend"} / container_spec_memory_limit_bytes{namespace=~"app|rental",container=~"spring-boot|backend"}) * 100'
           summary: "Spring Boot pod memory above 85% of cgroup limit"
           description: "spring-boot pod working-set memory has been above 85% of its cgroup limit for 2m. Risk of imminent OOMKill. Check JVM heap (Micrometer jvm_memory_used_bytes) and pod resource requests/limits."
 
@@ -765,9 +765,9 @@ groups:
             model:
               expr: |
                 (
-                  rate(container_cpu_usage_seconds_total{namespace="app",container="spring-boot"}[5m])
+                  rate(container_cpu_usage_seconds_total{namespace=~"app|rental",container=~"spring-boot|backend"}[5m])
                   /
-                  (container_spec_cpu_quota{namespace="app",container="spring-boot"} / container_spec_cpu_period{namespace="app",container="spring-boot"})
+                  (container_spec_cpu_quota{namespace=~"app|rental",container=~"spring-boot|backend"} / container_spec_cpu_period{namespace=~"app|rental",container=~"spring-boot|backend"})
                 ) * 100
               instant: false
               range: true
@@ -800,7 +800,7 @@ groups:
           component: pod
           timeframe: 10m
         annotations:
-          expr: '(rate(container_cpu_usage_seconds_total{namespace="app",container="spring-boot"}[5m]) / (container_spec_cpu_quota{namespace="app",container="spring-boot"} / container_spec_cpu_period{namespace="app",container="spring-boot"})) * 100'
+          expr: '(rate(container_cpu_usage_seconds_total{namespace=~"app|rental",container=~"spring-boot|backend"}[5m]) / (container_spec_cpu_quota{namespace=~"app|rental",container=~"spring-boot|backend"} / container_spec_cpu_period{namespace=~"app|rental",container=~"spring-boot|backend"})) * 100'
           summary: "Spring Boot pod CPU above 80% of cgroup quota"
           description: "spring-boot pod CPU usage has been above 80% of its cgroup CPU quota for 2m. Likely throttling on the cgroup. Investigate hot endpoints (HTTP request rate per URI), JVM threads, GC pressure."
 
