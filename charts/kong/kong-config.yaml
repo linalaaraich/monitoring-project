@@ -29,6 +29,18 @@ data:
             paths:
               - /
             strip_path: false
+      - name: rental-backend-api
+        # car-rental tenant (added 2026-05-19). Spring Boot + MySQL workload in
+        # the `rental` namespace. Routed behind Kong so HighKongP95Latency,
+        # the prometheus plugin's per-upstream metrics, and the global
+        # opentelemetry tracing plugin all apply automatically — same
+        # observability coverage as backend-api.
+        url: http://backend-service.rental.svc.cluster.local:8080
+        routes:
+          - name: rental-api-route
+            paths:
+              - /rental
+            strip_path: true   # /rental/api/public/cars → /api/public/cars on upstream
     # Plugins at the top level are applied globally (to every route/service).
     # Prometheus plugin enabled globally so Kong emits per-status-code,
     # per-latency, and bandwidth metrics — not just base nginx counters.
