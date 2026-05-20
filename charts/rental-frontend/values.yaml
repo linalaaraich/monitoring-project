@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=http://json-schema.org/draft-07/schema
+
+image:
+  registry: carrentalacr2-ash6d8a2bzawgkht.azurecr.io
+  repository: frontend
+  tag: 15
+  pullPolicy: IfNotPresent
+
+# ========== IMAGE PULL SECRETS (pour ACR privé) ==========
+imagePullSecrets:
+  - name: acr-secret
+
+replicaCount: 2
+
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 0
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 80
+  annotations: {}
+
+resources:
+  requests:
+    memory: "32Mi"
+    cpu: "25m"
+  limits:
+    memory: "128Mi"
+    cpu: "100m"
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false
+
+env:
+  ENVIRONMENT: "production"
+  API_URL: "http://backend-service:8080"
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 15
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 2
+
+serviceAccount:
+  create: false
+  name: "default"

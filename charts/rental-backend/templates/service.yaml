@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  labels:
+    app: backend
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: backend
+
+---
+# SECRET POUR DATABASE
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+  labels:
+    app: backend
+type: Opaque
+stringData:
+  password: {{ .Values.database.password | quote }}

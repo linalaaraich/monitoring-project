@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=http://json-schema.org/draft-07/schema
+
+# ===== CONFIGURATION DATABASE OPTIMISÉE POUR AZURE =====
+
+# ========== IMAGE ==========
+image:
+  registry: docker.io
+  repository: mysql
+  tag: "8.0"
+  pullPolicy: IfNotPresent
+
+# ========== STORAGE ==========
+storage:
+  size: 1Gi
+  storageClassName: default
+  accessMode: ReadWriteOnce
+
+# ========== DATABASE SECRETS ==========
+secret:
+  rootPassword: "booking-car"
+  database: "car_rental_ddb"
+
+# ========== SERVICE ==========
+service:
+  type: ClusterIP
+  port: 3306
+  targetPort: 3306
+
+# ========== RESOURCES ==========
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "250m"
+
+# ========== REPLICAS ==========
+replicaCount: 1
+
+# ========== HEALTH CHECKS ==========
+livenessProbe:
+  exec:
+    command: 
+      - sh
+      - -c
+      - "mysqladmin ping -h localhost -u root -p$MYSQL_ROOT_PASSWORD"
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  exec:
+    command:
+      - sh
+      - -c
+      - "mysql -h localhost -u root -p$MYSQL_ROOT_PASSWORD -e 'SELECT 1'"
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2

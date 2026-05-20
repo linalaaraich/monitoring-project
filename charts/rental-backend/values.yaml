@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=http://json-schema.org/draft-07/schema
+
+# ========== IMAGE ==========
+image:
+  registry: carrentalacr2-ash6d8a2bzawgkht.azurecr.io
+  repository: backend
+  tag: 15
+  pullPolicy: IfNotPresent
+
+# ========== IMAGE PULL SECRETS (pour ACR privé) ==========
+imagePullSecrets:
+  - name: acr-secret
+replicaCount: 1
+
+# ========== SERVICE ==========
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+# ========== DATABASE ==========
+database:
+  host: mysql-service  # ✅ Nom du service Kubernetes (helm/database/templates/service.yaml)
+  port: 3306
+  name: car_rental_ddb
+  user: root
+  password: "booking-car"
+
+# ========== RESOURCES ==========
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "25m"        # ← Change 50m en 25m
+  limits:
+    memory: "512Mi"
+    cpu: "200m"       
+
+# ========== AUTOSCALING ==========
+autoscaling:
+  enabled: false
+
+# ========== ENVIRONMENT ==========
+env:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "WARN"
+  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+  SPRING_JPA_SHOW_SQL: "false"
+
+# ========== HEALTH CHECKS ==========
+livenessProbe:
+  httpGet:
+    path: /api/public/cars
+    port: 8080
+  initialDelaySeconds: 90
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/public/cars
+    port: 8080
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# ========== INGRESS ==========
+ingress:
+  enabled: false
+
+# ========== SERVICE ACCOUNT ==========
+serviceAccount:
+  create: true
+  name: "backend-sa"
+
+# ========== POD ANNOTATIONS ==========
+podAnnotations: {}
