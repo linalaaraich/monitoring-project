@@ -19,14 +19,16 @@ grafana_smtp_from: "laaraichlina@gmail.com"
 grafana_contact_email: "laaraichlina@gmail.com"
 
 # Triage service webhook — Grafana Alerting sends all alerts here.
-# Triage is now a ClusterIP Service inside k3s; Grafana reaches it via the
-# Triage service webhook endpoint. As of 2026-04-23 the triage service runs
-# on Lina's laptop (cires-ai host, reachable at 100.117.118.70 over tailscale)
-# — not on k3s. This URL is the laptop's tailscale IP + triage's /webhook/grafana
-# route. Monitoring VM is on the same tailnet (see `tailscale status`) so the
-# webhook POST routes through the tailnet, not the public internet.
-# Verified reachable with: `ansible monitoring -m shell -a "curl -fsS --max-time 5 http://100.117.118.70:8090/health"`
-triage_service_webhook_url: "http://100.117.118.70:8090/webhook/grafana"
+# As of 2026-05-21, the triage service runs on an AWS g5.xlarge in us-west-2
+# (instance `i-03aec662b1a47ad8f`, A10G GPU, qwen2.5:14b-instruct primary +
+# 7b fallback). Webhooks go through a Lambda autoshutoff gateway fronted by
+# API Gateway: traffic-aware lifecycle, 20-min idle stop, SQS-buffered cold
+# starts. The instance is reachable from the operator dashboard via Tailscale
+# (`observability-gpu-uswest2`), but Grafana itself posts to the public
+# API Gateway URL — Grafana doesn't need a tailnet route to reach it.
+# Prior URL (adolin-wsl laptop): http://100.117.118.70:8090/webhook/grafana
+# (kept as rollback fallback; do not delete adolin-wsl's container yet.)
+triage_service_webhook_url: "https://l5anj15qi0.execute-api.us-west-2.amazonaws.com/webhook/grafana"
 
 loki_port: 3100
 jaeger_port_ui: 16686
