@@ -554,8 +554,8 @@ The Alertmanager Ansible role, config, and container are removed from the monito
 
 ### 7.2 Promtail — Why It's Gone
 
-Promtail was previously responsible for shipping logs from application and network VMs to Loki. It has been replaced by the OTel Collector's filelog receiver, which:
-- Is already deployed on all VMs for trace collection
+Promtail was used until 2026-03-30; replaced by OTel Collector for unified logs+traces ingest. Promtail was previously responsible for shipping logs from application and network VMs to Loki. It has been replaced by the OTel Collector's `filelog/containers` receiver (which tails `/var/lib/docker/containers/**/*-json.log`) and the OTel Collector's native `loki` exporter (which pushes to `http://loki:3100/loki/api/v1/push`). The migration:
+- Reuses the OTel Collector already deployed on all VMs for trace collection
 - Eliminates the need for a second agent (Promtail) on each VM
 - Supports the same trace_id extraction for log-trace correlation
 - Is maintained by the same OpenTelemetry project as the rest of the telemetry stack

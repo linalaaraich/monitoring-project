@@ -2,7 +2,8 @@
 
 Triggers Drain3's self-fire by emitting a batch of log lines with a
 template Drain3 has never seen before. The lines go to the pod's stdout
-(PID 1's fd 1), get scraped by Promtail/whatever ships logs to Loki,
+(PID 1's fd 1), get picked up by the OTel Collector's `filelog/containers`
+receiver and forwarded to Loki via its `loki` exporter,
 get pulled by Drain3's background ingest loop, get classified as
 NEW_PATTERN, push the batch's anomaly rate above the threshold, and
 fire /webhook/drain3 → triage produces a Drain3AnomalyDetected RCA.
