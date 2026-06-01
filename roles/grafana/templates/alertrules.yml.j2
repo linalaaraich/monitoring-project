@@ -558,7 +558,13 @@ groups:
           # human can decide whether the rule is too noisy or there's a
           # real signal the LLM missed. CRITICAL-severity rules MUST NOT
           # carry this annotation. See decisions-log D21.
-          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
+          # Tuned 2026-06-01 after audit: llm_dismiss was 2 — created a noise
+          # loop where 71 of 76 MediumCpuUsage emails on k3s-node were
+          # force-escalates of LLM dismissals. Raised to 10 so the gate's
+          # "human catches what the LLM misses" backstop still fires for
+          # genuinely-sustained noise, but normal periodic CPU bursts
+          # don't generate a recurring email storm.
+          recurrence_gate: "pre_llm=4,llm_dismiss=10,window=2h"
 
       - uid: medium-memory-usage
         title: MediumMemoryUsage
