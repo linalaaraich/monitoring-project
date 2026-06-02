@@ -104,7 +104,9 @@ async def preflight() -> bool:
         logger.error("Triage /health returned non-JSON — aborting.")
         return False
 
-    # Active alerts via Grafana alertmanager
+    # Active alerts via Grafana unified-alerting API (the path below is
+    # Grafana's own internal endpoint name and is required by Grafana's API
+    # contract; it does not invoke any external alerting component).
     alerts = await http_get(
         "http://admin:admin@observability-rca-monitoring:3000/api/alertmanager/grafana/api/v2/alerts"
     )

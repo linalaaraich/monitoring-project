@@ -252,7 +252,6 @@ Spring Boot logs include `trace_id` in the log output (injected by the OTel Java
 
 | Property | Detail |
 |----------|--------|
-| **Replaces** | Prometheus Alertmanager (removed from the stack) |
 | **How it works** | Grafana evaluates alert rules directly against Prometheus and Loki data sources on a configurable schedule (e.g., every 60s). When a rule fires, it sends a webhook POST to the triage service. |
 | **Alert rules** | Defined in Grafana via UI or YAML provisioning. Examples: high latency (p95 > 500ms for 5m), high error rate (5xx > 5% for 3m), service down (up == 0 for 2m), OTel Collector span drop rate > 1%. |
 | **Contact point** | Single webhook: `http://<ai-vm>:8090/webhook/grafana`. No email, no Slack, no PagerDuty. The triage service is the only recipient. |
@@ -339,7 +338,7 @@ The LLM immediately knows to focus on lines 3-4. The anomaly summary ("2 of 5 li
 | | `POST /webhook/drain3` — receives Drain3 anomaly notifications (internal, same host) |
 | **Decision logic** | Rule-based triage (not ML). Deduplication by alert fingerprint + time window. Correlation by timestamp proximity and affected service. Noise suppression for known benign patterns. |
 | **LLM invocation** | When an alert passes triage, the service calls Ollama's `/api/chat` endpoint with a structured prompt containing the alert details, and instructs the LLM to use MCP tools for data gathering. |
-| **Email notification** | Uses Python `smtplib` with Gmail SMTP (same credentials previously used by Alertmanager). Sends only when: Layer 3 returns a "valid" verdict with an RCA report. |
+| **Email notification** | Uses Python `smtplib` with Gmail SMTP. Sends only when Layer 3 returns a "valid" verdict with an RCA report. |
 | **RCA History** | SQLite database on the AI/LLM VM. Stores every decision: timestamp, alert source, alert details, triage decision, LLM verdict, RCA report (if any), action taken. |
 
 #### Triage Decision Flow

@@ -42,7 +42,7 @@
 | **Role** | Visualization dashboards, alert rule evaluation, webhook delivery to triage service |
 | **Plugins used** | **None.** Prometheus, Loki, and Jaeger data sources are built into Grafana core. |
 | **Third-party marketplace plugins** | **None installed.** The architecture deliberately avoids Grafana marketplace plugins to eliminate supply chain risk. |
-| **Alerting** | Uses Grafana's built-in Unified Alerting (replaces Alertmanager). Alert rules evaluate against Prometheus and Loki data sources. A single webhook contact point sends alerts to the triage service. No email contact point in Grafana — email is handled by the triage service after AI evaluation. |
+| **Alerting** | Uses Grafana's built-in Unified Alerting. Alert rules evaluate against Prometheus and Loki data sources. A single webhook contact point sends alerts to the triage service. No email contact point in Grafana — email is handled by the triage service after AI evaluation. |
 | **Security** | Grafana runs in private VPC on the monitoring VM. Admin credentials should be hardened for production. Dashboard provisioning is done via YAML files, not manual UI configuration. |
 | **Maintainer** | Grafana Labs (open-source core, AGPLv3) |
 

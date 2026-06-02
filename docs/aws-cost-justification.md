@@ -84,7 +84,7 @@ Terraform outputs (instance IPs, RDS endpoint, S3 bucket name, CloudFront domain
 - **S3 + CloudFront for React:** Static files don't need a running server. S3 hosting with CloudFront CDN is how production React apps are served — cheaper, faster, and more scalable than an Nginx container.
 - **RDS for MySQL:** Managed database with automated backups, patching, and a dedicated endpoint. Separating the database from the backend EC2 mirrors production best practices and avoids resource contention.
 - **t3.small (Backend):** Without MySQL co-located, Spring Boot alone needs minimal resources. 2 GB RAM is sufficient for a demo-scale API.
-- **t3.large (Monitoring):** Prometheus, Grafana (including built-in alerting), Loki, Jaeger, and OTel Collector need memory. 8 GB is comfortable for a demo-scale deployment with short retention. Alertmanager is not needed — Grafana Alerting handles alert evaluation and sends webhooks directly to the triage service.
+- **t3.large (Monitoring):** Prometheus, Grafana (including built-in alerting), Loki, Jaeger, and OTel Collector need memory. 8 GB is comfortable for a demo-scale deployment with short retention. Grafana Alerting handles alert evaluation and sends webhooks directly to the triage service.
 - **t3.small (Network):** Kong in dbless mode is lightweight.
 - **g4dn.xlarge (AI/LLM):** Most cost-effective GPU instance. NVIDIA T4 (16 GB VRAM) runs quantized 7B–8B models (Mistral 7B, Llama 3 8B) with good inference speed. Hosts the full AI stack: Ollama (LLM), FastAPI triage service with embedded Drain3, and 5 MCP bridge servers (Prometheus, Loki, Jaeger, Drain3, RCA History). Sufficient for MVP demo.
 

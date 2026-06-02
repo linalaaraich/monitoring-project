@@ -50,7 +50,7 @@ These changes were implemented and committed as part of the Promtail-to-OTel Col
 
 - **Test OTel Collector logs pipeline:** Verify Loki receives logs via the OTel Collector's Loki exporter (`http://loki:3100/loki/api/v1/push`)
 - **Verify Loki receives OTel Collector logs:** The current setup uses the OTel Collector's native `loki` exporter (not OTLP). Confirm logs appear in Grafana Explore with `{service.name=~".+"}` queries
-- **Test new alert rules:** Trigger medium CPU/memory usage (80%) to ensure Alertmanager notifications fire
+- **Test new alert rules:** Trigger medium CPU/memory usage (80%) to ensure Grafana alert notifications fire
 - **Validate trace-log correlation:** Check Grafana Loki datasource uses `labelName: trace_id` correctly — clicking a trace_id in logs should navigate to Jaeger
 - **Test Grafana dashboard re-provisioning:** Ensure removing `grafana.db` when dashboards change works correctly (the grafana role handles this)
 
@@ -97,7 +97,6 @@ These changes were implemented and committed as part of the Promtail-to-OTel Col
 - **Tail-based trace sampling:** Add OTel Collector tail sampling processor to reduce storage while keeping interesting traces
 - **Multi-environment support:** Extend Ansible inventory for staging/production environments
 - **SSL/TLS everywhere:** Add TLS termination at Kong and inter-service encryption
-- **Grafana alerting migration:** Move from Prometheus Alertmanager to Grafana-managed alerts for unified alert management
 - **Log-based metrics:** Use Loki recording rules to generate metrics from log patterns
 
 ### Long-term

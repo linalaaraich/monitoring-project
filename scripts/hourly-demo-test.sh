@@ -6,7 +6,7 @@
 # Each run:
 #   1. Runs load-test.sh TOTAL=200 through Kong (creates traces + metrics)
 #   2. Injects a malformed-JSON POST burst (triggers Drain3 anomalies)
-#   3. Fires a synthetic Grafana alertmanager webhook to the triage service
+#   3. Fires a synthetic Grafana alert webhook to the triage service
 #   4. Logs summary + the RCA decision ID (once it lands)
 #
 # Output: appended to /var/log/cires-demo-tests.log
