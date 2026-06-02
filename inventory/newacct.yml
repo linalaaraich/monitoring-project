@@ -1,0 +1,77 @@
+---
+# Inventory targeting the new AWS account (321556173045) infrastructure.
+# Hosts join Tailscale via user-data; controller reaches them by MagicDNS.
+#
+# Provisioned 2026-06-02 by carbon-copy of the old account (735115318342).
+# Keep this file in sync with `inventory/tailnet.yml` while both estates
+# coexist; cut over to this exclusively once the old account is retired.
+#
+# Use:
+#     ansible-playbook -i inventory/newacct.yml playbooks/site.yml
+#
+# Requires:
+#   - Controller on the same tailnet
+#   - MagicDNS enabled
+#   - Tailscale ACL grants SSH from controller to deploy@<new hosts>
+#   - SSH key at ~/.ssh/ansible_key matches the ansible-key-newacct EC2 keypair
+
+all:
+  children:
+    monitoring:
+      hosts:
+        monitoring-vm:
+          ansible_host: observability-rca-newacct-monitoring
+          ansible_user: deploy
+          # Host-level vars beat inventory group_vars/all.yml. Required so the
+          # new-account run scrapes the right host instead of the old account's
+          # private IP (10.0.1.68) baked into all.yml.
+          monitoring_vm_ip: "10.0.1.105"
+          monitoring_vm_public_ip: "observability-rca-newacct-monitoring"
+          k3s_host_ip: "10.0.1.152"
+          grafana_external_url: "http://observability-rca-newacct-monitoring:3000"
+          rds_endpoint: "observability-rca-newacct-mysql.culs6qk8ak36.us-east-1.rds.amazonaws.com"
+          rds_port: 3306
+    k3s_cluster:
+      hosts:
+        k3s-node:
+          ansible_host: observability-rca-newacct-k3s
+          ansible_user: deploy
+          k3s_control_node: true
+          monitoring_vm_ip: "10.0.1.105"
+          monitoring_vm_public_ip: "observability-rca-newacct-monitoring"
+          k3s_host_ip: "10.0.1.152"
+          grafana_external_url: "http://observability-rca-newacct-monitoring:3000"
+          rds_endpoint: "observability-rca-newacct-mysql.culs6qk8ak36.us-east-1.rds.amazonaws.com"
+          rds_port: 3306
+    gpu_triage:
+      hosts:
+        gpu-host:
+          ansible_host: observability-gpu-uswest2-newacct
+          ansible_user: ubuntu
+    laptop_workstations:
+      hosts:
+        adolin-wsl:
+          ansible_host: adolin-wsl
+          ansible_user: lina
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_private_key_file: ~/.ssh/ansible_key
+    timezone: "Africa/Casablanca"
+    ntp_servers:
+      - 0.ma.pool.ntp.org
+      - 1.ma.pool.ntp.org
+
+    # ---- New-account override notes ----
+    # The monitoring_vm_ip / k3s_host_ip / rds_endpoint / grafana_external_url
+    # overrides are set as host_vars on each host above (not here) because
+    # inventory group_vars/all.yml has higher precedence than the inventory-
+    # level `vars:` block. Host-vars are the only inventory-side scope that
+    # beats group_vars/all.yml without editing the shared file.
+    #
+    # Why private IPs (not MagicDNS) for *_vm_ip: those values land in
+    # Prometheus scrape targets and other in-container configs. Docker bridge
+    # containers don't inherit Tailscale's MagicDNS resolver (systemd-resolved
+    # on 127.0.0.53), so MagicDNS names won't resolve inside the containers.
+    # Private IPs route fine from container -> host network.
+    # The RDS password lives at /root/.rds-password-newacct (mode 600); never
+    # committed and not referenced in this inventory.
