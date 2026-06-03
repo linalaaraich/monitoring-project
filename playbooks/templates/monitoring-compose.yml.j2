@@ -52,6 +52,12 @@ services:
     image: otel/opentelemetry-collector-contrib:{{ otel_collector_version }}
     container_name: otel-collector
     restart: unless-stopped
+    # Self-monitoring (Phase 2, 2026-06-03): /var/log/syslog and
+    # /var/log/auth.log are syslog:adm 640, and /var/lib/docker/containers
+    # is root:root 710. The default otel-collector-contrib UID (10001) gets
+    # EACCES. Run as root for the host-log shipping role; the container
+    # binary is single-purpose and the only exposed ports are OTLP/health.
+    user: "0:0"
     ports:
       - "{{ otel_collector_grpc_port }}:4317"
       - "{{ otel_collector_http_port }}:4318"
