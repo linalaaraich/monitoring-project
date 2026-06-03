@@ -1,6 +1,45 @@
 ---
-# node_exporter container is defined in the unified per-VM docker-compose.
-# This role is a placeholder for any future node_exporter-specific config.
-- name: Ensure node_exporter role is included
+# Two paths:
+#   1. Docker-compose path (monitoring VM): node_exporter is a container in
+#      the unified monitoring stack — see playbooks/templates/monitoring-compose.yml.j2.
+#      This task file is effectively a no-op for that host.
+#   2. Native path (k3s host): the k3s VM doesn't run docker-compose, so we
+#      install node_exporter as a host systemd unit via apt. Enabled when
+#      `node_exporter_native: true` is set at the host/group level (currently
+#      group_vars/k3s_cluster.yml for the new account).
+#
+# Added 2026-06-02 after the real-induction agent found that the k3s host's
+# CPU was invisible to Grafana rules — Prometheus only scraped the monitoring
+# host itself. We need a node_exporter on every host whose CPU/memory can be
+# the root cause of an alert.
+- name: Native node_exporter path — install + enable systemd service
+  when: node_exporter_native | default(false) | bool
+  become: true
+  block:
+    - name: Install prometheus-node-exporter from apt
+      apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Ensure prometheus-node-exporter is enabled + running
+      systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: true
+
+    - name: Sanity check — node_exporter responding on {{ node_port }}
+      uri:
+        url: "http://localhost:{{ node_port }}/metrics"
+        return_content: false
+        status_code: 200
+      retries: 5
+      delay: 2
+      register: ne_health
+      until: ne_health.status == 200
+
+- name: Docker-compose path — node_exporter runs as part of the unified stack
+  when: not (node_exporter_native | default(false) | bool)
   debug:
-    msg: "node_exporter will be started as part of the unified stack"
+    msg: "node_exporter will be started by the docker-compose stack on this host"

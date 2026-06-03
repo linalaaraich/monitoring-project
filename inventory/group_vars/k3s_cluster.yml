@@ -22,3 +22,10 @@ kong_chart_version: "2.38.0"
 # k3s host details (updated from Terraform outputs)
 k3s_host_ip: "<K3S_HOST_IP>"
 gpu_host_ip: "<GPU_HOST_IP>"
+
+# Install node_exporter as a native systemd service (apt) on k3s hosts.
+# The k3s VM doesn't run a docker-compose stack the way the monitoring VM
+# does, so we install node_exporter directly. See roles/node_exporter/tasks/main.yml.
+# Added 2026-06-02 — the real-induction agent found k3s CPU was invisible
+# to Grafana because Prom never had a scrape target on this host.
+node_exporter_native: true

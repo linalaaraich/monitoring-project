@@ -20,6 +20,12 @@
   roles:
     - role: common
     - role: docker
+    # node_exporter installed as a host systemd service (native path,
+    # gated by node_exporter_native flag in group_vars/k3s_cluster.yml).
+    # Tagged so it can be applied on its own without re-running the
+    # full k3s bootstrap: `--tags node_exporter`.
+    - role: node_exporter
+      tags: [node_exporter]
     - role: xanmanning.k3s
 
   post_tasks:

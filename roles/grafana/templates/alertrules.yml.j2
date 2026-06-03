@@ -26,11 +26,10 @@ groups:
     folder: Provisioned Alerts
     interval: 60s
     rules:
-      # ADAPTIVE THRESHOLD — Epic 5 US-5.4 (2026-04-27).
-      # Rule fires when current p95 exceeds same-hour baseline (7d ago,
-      # ±1h window) by more than 3 standard deviations, OR exceeds the
-      # 1000 ms static floor when no baseline history is available.
-      # See decisions-log.html#d17 for the philosophy + tradeoffs.
+      # STATIC THRESHOLD — temporary regression from adaptive (2026-06-02).
+      # TODO 2026-06-09: revert to adaptive once new account has 7d baseline.
+      # Same `or vector(N)` label-loss bug as MediumCpuUsage — see comment
+      # on that rule. Using the historical fallback floor (1000ms) directly.
       - uid: high-p95-latency
         title: HighP95Latency
         condition: C
@@ -38,14 +37,7 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: |
-                (histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000)
-                -
-                (
-                  avg_over_time((histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000)[1h:1m] offset 7d)
-                  + 3 * stddev_over_time((histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000)[1h:1m] offset 7d)
-                  or vector(1000)
-                )
+              expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000'
               instant: false
               range: true
               intervalMs: 15000
@@ -66,7 +58,7 @@ groups:
               conditions:
                 - evaluator:
                     type: gt
-                    params: [0]
+                    params: [1000]
         noDataState: OK
         execErrState: Error
         for: 2m
@@ -76,11 +68,11 @@ groups:
           signal: metric
           component: api
           timeframe: 10m
-          adaptive_threshold: "true"
+          # adaptive_threshold removed 2026-06-02 — see TODO above.
         annotations:
           expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000'
-          summary: "P95 request latency above adaptive baseline"
-          description: "Spring Boot p95 latency exceeds the same-hour 7-day baseline by more than 3σ, or 1000ms if no baseline history is available. Adaptive threshold reduces false positives during off-hours and traffic-driven spikes."
+          summary: "P95 request latency above 1000ms"
+          description: "Spring Boot p95 latency has exceeded 1000ms for 2m. Static threshold (temporary, until 7d baseline accumulates on the new account)."
           # P2 fix (2026-05-19) — recurrence-gate opt-in.
           # Warning-severity (severity: warning above) and historically
           # prone to dismiss-cascades during traffic-driven spikes. The
@@ -89,8 +81,10 @@ groups:
           # regression. See decisions-log D21.
           recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
 
-      # ADAPTIVE THRESHOLD — Epic 5 US-5.4 (2026-04-27).
-      # Mirror of HighP95Latency but on the kong gateway-layer histogram.
+      # STATIC THRESHOLD — temporary regression from adaptive (2026-06-02).
+      # TODO 2026-06-09: revert to adaptive once new account has 7d baseline.
+      # Same `or vector(N)` label-loss bug as MediumCpuUsage — see comment
+      # on that rule. Using the historical fallback floor (1000ms) directly.
       - uid: high-kong-p95-latency
         title: HighKongP95Latency
         condition: C
@@ -98,14 +92,7 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: |
-                histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))
-                -
-                (
-                  avg_over_time(histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))[1h:1m] offset 7d)
-                  + 3 * stddev_over_time(histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))[1h:1m] offset 7d)
-                  or vector(1000)
-                )
+              expr: 'histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))'
               instant: false
               range: true
               intervalMs: 15000
@@ -126,7 +113,7 @@ groups:
               conditions:
                 - evaluator:
                     type: gt
-                    params: [0]
+                    params: [1000]
         noDataState: OK
         execErrState: Error
         for: 2m
@@ -136,11 +123,11 @@ groups:
           signal: metric
           component: gateway
           timeframe: 10m
-          adaptive_threshold: "true"
+          # adaptive_threshold removed 2026-06-02 — see TODO above.
         annotations:
           expr: 'histogram_quantile(0.95, sum(rate(kong_request_latency_ms_bucket[5m])) by (le))'
-          summary: "P95 Kong latency above adaptive baseline"
-          description: "Kong p95 end-to-end latency exceeds the same-hour 7-day baseline by more than 3σ, or 1000ms if no baseline history is available."
+          summary: "P95 Kong latency above 1000ms"
+          description: "Kong p95 end-to-end latency has exceeded 1000ms for 2m. Static threshold (temporary, until 7d baseline accumulates on the new account)."
           # P2 fix (2026-05-19) — recurrence-gate opt-in.
           # Warning-severity (severity: warning above). Force-escalates
           # after 2 LLM dismisses in a 2h window so a cascade of
@@ -497,10 +484,20 @@ groups:
           summary: "Critical memory usage"
           description: "Memory usage has exceeded 95%. OOM risk."
 
-      # ADAPTIVE THRESHOLD — Epic 5 US-5.4 (2026-04-27).
-      # CPU baseline is more seasonal than latency (3am idle vs 2pm peak),
-      # so the same-hour-7-days-ago + 3σ pattern is most valuable here.
-      # Static fallback floor: 80% (the prior MediumCpuUsage threshold).
+      # STATIC THRESHOLD — temporary regression from adaptive (2026-06-02).
+      # TODO 2026-06-09: revert to adaptive once new account has 7d baseline.
+      #
+      # Original rule used `or vector(80)` as a static-fallback when no 7d
+      # baseline existed, but `vector(80)` is a 1-element vector with NO
+      # `instance` label, so the outer subtraction (which IS labelled by
+      # instance from the rate() avg by(instance)) had no label match and
+      # produced an empty vector even at 100% CPU. Result: rule was
+      # permanently `inactive`. See real-induction agent finding 2026-06-02.
+      #
+      # Quickest fix: drop the adaptive baseline expression entirely for
+      # the bring-up week and use the static fallback floor (80%) directly.
+      # Adaptive returns on 2026-06-09 when there's 7d of history on the
+      # new account; that diff will revert this block.
       - uid: medium-cpu-usage
         title: MediumCpuUsage
         condition: C
@@ -508,14 +505,7 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: |
-                (100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100))
-                -
-                (
-                  avg_over_time((100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100))[1h:1m] offset 7d)
-                  + 3 * stddev_over_time((100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100))[1h:1m] offset 7d)
-                  or vector(80)
-                )
+              expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
               instant: false
               range: true
               intervalMs: 15000
@@ -536,7 +526,7 @@ groups:
               conditions:
                 - evaluator:
                     type: gt
-                    params: [0]
+                    params: [80]
         noDataState: OK
         execErrState: Error
         for: 1m
@@ -546,11 +536,11 @@ groups:
           signal: metric
           component: infrastructure
           timeframe: 5m
-          adaptive_threshold: "true"
+          # adaptive_threshold removed 2026-06-02 — see TODO above.
         annotations:
           expr: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
-          summary: "CPU usage above adaptive baseline"
-          description: "Per-instance CPU exceeds same-hour 7-day baseline by more than 3σ, or 80% if no baseline history is available. Adapts to traffic seasonality (3am vs 2pm baselines differ)."
+          summary: "CPU usage above 80%"
+          description: "Per-instance CPU has exceeded 80% for 1 minute. Static threshold (temporary, until 7d baseline accumulates on the new account)."
           # US-5.8 recurrence-gate opt-in. Warning-severity rule with a known
           # noise profile — first 4 fires inside 2h are gated pre-LLM (no
           # email), and if the LLM dismisses the same fingerprint twice in

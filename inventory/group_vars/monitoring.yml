@@ -20,7 +20,7 @@ grafana_contact_email: "laaraichlina@gmail.com"
 
 # Triage service webhook — Grafana Alerting sends all alerts here.
 # As of 2026-05-21, the triage service runs on an AWS g5.xlarge in us-west-2
-# (instance `i-03aec662b1a47ad8f`, A10G GPU, qwen2.5:14b-instruct primary +
+# (instance `i-03aec662b1a47ad8f`, A10G GPU, qwen2.5:14b primary +
 # 7b fallback). Webhooks go through a Lambda autoshutoff gateway fronted by
 # API Gateway: traffic-aware lifecycle, 20-min idle stop, SQS-buffered cold
 # starts. The instance is reachable from the operator dashboard via Tailscale
@@ -28,7 +28,7 @@ grafana_contact_email: "laaraichlina@gmail.com"
 # API Gateway URL — Grafana doesn't need a tailnet route to reach it.
 # Prior URL (adolin-wsl laptop): http://100.117.118.70:8090/webhook/grafana
 # (kept as rollback fallback; do not delete adolin-wsl's container yet.)
-triage_service_webhook_url: "https://l5anj15qi0.execute-api.us-west-2.amazonaws.com/webhook/grafana"
+triage_service_webhook_url: "https://p2j9dqjh3h.execute-api.us-west-2.amazonaws.com/webhook/grafana"
 
 loki_port: 3100
 jaeger_port_ui: 16686
@@ -66,6 +66,14 @@ prometheus_targets:
   - job: "otel-collector"
     host: "{{ monitoring_vm_ip }}"
     port: "8888"
+  # k3s host node_exporter — installed natively (apt prometheus-node-exporter)
+  # by the node_exporter role in playbooks/k3s.yml. Without this entry the k3s
+  # host's CPU/memory/disk are invisible to Prom, so any infra-level Grafana
+  # rule (HighCpuUsage / MediumCpuUsage / etc.) on service=k3s-node never fires.
+  # Added 2026-06-02 after the real-induction agent caught the gap.
+  - job: "k3s-node"
+    host: "{{ k3s_host_ip }}"
+    port: "{{ node_port }}"
 
 loki_retention_days: 7
 
