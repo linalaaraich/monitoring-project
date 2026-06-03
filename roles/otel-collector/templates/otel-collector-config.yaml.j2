@@ -33,6 +33,70 @@ receivers:
         field: resource["host.name"]
         value: {{ inventory_hostname }}
 {% endif %}
+{% if 'monitoring' in group_names %}
+  # Self-monitoring: capture each docker container's stdout/stderr on the
+  # monitoring VM and ship to Loki. Without this, the central observability
+  # stack (loki, prometheus, grafana, jaeger, otel-collector itself,
+  # node-exporter, cadvisor) is invisible to itself - "the cobbler's children
+  # have no shoes". Added 2026-06-03 to fix Phase 1 audit gap #2.
+  #
+  # The compose file mounts /var/lib/docker/containers read-only into this
+  # collector via the monitoring-compose.yml.j2 template.
+  filelog/containers:
+    include: [/var/lib/docker/containers/*/*-json.log]
+    start_at: end
+    include_file_path: true
+    operators:
+      # Each line is a docker json-log record: {"log":"...","stream":"stdout","time":"..."}
+      - type: json_parser
+        parse_from: body
+        parse_to: attributes
+      - type: move
+        from: attributes.log
+        to: body
+      - type: move
+        from: attributes.stream
+        to: attributes["log.iostream"]
+      - type: move
+        from: attributes.time
+        to: attributes["log.time"]
+      # Extract the docker container id from the file path:
+      #   /var/lib/docker/containers/<container_id>/<container_id>-json.log
+      # Set as a resource attr so it can be promoted to a Loki label.
+      - type: regex_parser
+        parse_from: attributes["log.file.path"]
+        regex: '^/var/lib/docker/containers/(?P<container_id>[a-f0-9]+)/'
+        parse_to: resource
+      # Drop the collector's own logs to avoid a feedback loop.
+      - type: filter
+        expr: 'body matches "otelcol\\\\.component" or body matches "fileconsumer"'
+      - type: add
+        field: resource["service.name"]
+        value: monitoring-vm
+      - type: add
+        field: resource["host.name"]
+        value: {{ inventory_hostname }}
+
+  # Self-monitoring: host syslog + auth.log. Mounted read-only into the
+  # collector via the monitoring-compose.yml.j2 template.
+  filelog/syslog:
+    include:
+      - /var/log/host/syslog
+      - /var/log/host/auth.log
+    start_at: end
+    include_file_path: true
+    operators:
+      - type: regex_parser
+        parse_from: attributes["log.file.path"]
+        regex: '^/var/log/host/(?P<log_source>[^/]+)$'
+        parse_to: resource
+      - type: add
+        field: resource["service.name"]
+        value: host-syslog
+      - type: add
+        field: resource["host.name"]
+        value: {{ inventory_hostname }}
+{% endif %}
 
 processors:
   batch:
@@ -47,7 +111,7 @@ processors:
         value: "cires"
       - action: insert
         key: loki.resource.labels
-        value: service.name, host.name, deployment.environment
+        value: service.name, host.name, deployment.environment, container_id, log_source
       - action: insert
         key: loki.format
         value: json
@@ -84,6 +148,6 @@ service:
       exporters: [otlp/jaeger]
 
     logs:
-      receivers: [otlp{% if 'network' in group_names %}, filelog/containers{% endif %}]
+      receivers: [otlp{% if 'network' in group_names %}, filelog/containers{% endif %}{% if 'monitoring' in group_names %}, filelog/containers, filelog/syslog{% endif %}]
       processors: [resource, batch]
       exporters: [loki]

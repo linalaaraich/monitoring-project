@@ -59,6 +59,11 @@ services:
       - "{{ otel_collector_health_port }}:13133"
     volumes:
       - {{ otel_collector_config_dir }}/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      # Self-monitoring (Phase 2, 2026-06-03): mount host log paths read-only
+      # so filelog/containers + filelog/syslog can ship them to Loki.
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log/syslog:/var/log/host/syslog:ro
+      - /var/log/auth.log:/var/log/host/auth.log:ro
 
   grafana:
     image: grafana/grafana:{{ grafana_version }}

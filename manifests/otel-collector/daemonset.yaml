@@ -31,7 +31,7 @@ spec:
             - "--config=/etc/otel-collector/otel-collector-config.yaml"
           env:
             - name: MONITORING_VM_IP
-              value: "REPLACE_WITH_MONITORING_VM_IP"
+              value: "10.0.1.105"
             - name: K8S_NODE_NAME
               valueFrom:
                 fieldRef:

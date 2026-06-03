@@ -11,12 +11,15 @@ metadata:
 data:
   otel-collector-config.yaml: |
     receivers:
-      # Collect container logs from /var/log/pods
+      # Collect container logs from /var/log/pods.
+      # 2026-06-03 (Phase 2): removed kube-system exclusion so coredns,
+      # metrics-server, local-path-provisioner, etc. are visible in Loki.
+      # The audit gate requires more than one service_name value, and
+      # excluding kube-system left only `app/spring-boot` flowing.
       filelog:
         include:
           - /var/log/pods/*/*/*.log
         exclude:
-          - /var/log/pods/kube-system_*/*/*.log
           - /var/log/pods/observability_otel-collector*/*/*.log
         start_at: end
         include_file_path: true
