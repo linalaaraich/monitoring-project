@@ -1,0 +1,64 @@
+---
+# 2026-06-03 Lina: emergency bridge applied to the new-account k3s cluster
+# to fix audit finding #3 (Loki had zero streams). The canonical
+# manifests/otel-collector/{namespace,service,daemonset}.yaml expect an
+# in-cluster OTel Collector DaemonSet — that DaemonSet was never applied
+# to the new-account k3s. Until it is, spring-boot's hard-coded
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc.cluster.local:4317
+# returns NXDOMAIN and every log + span export is silently dropped.
+#
+# Workaround: a headless Service backed by a manual Endpoints object
+# pointing at the centralized OTel Collector still running on the
+# monitoring VM (10.0.1.105:4317/4318). Same in-cluster DNS name, so no
+# app-side change is needed; traffic egresses the k3s node to the
+# monitoring VM via the VPC private network.
+#
+# To revert this workaround once the DaemonSet is deployed:
+#   kubectl delete -f service-bridge-newacct.yaml
+#   kubectl apply -f namespace.yaml -f service.yaml -f rbac.yaml \
+#                 -f configmap.yaml -f daemonset.yaml
+#
+# ExternalName not used because it requires a DNS hostname; we want a
+# bare IP. Endpoints lets us point svc -> arbitrary IP:port.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: observability-platform
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: observability-platform
+spec:
+  # No selector on purpose — we manage Endpoints manually below.
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: otel-collector
+  namespace: observability
+subsets:
+  - addresses:
+      - ip: 10.0.1.105    # observability-rca-newacct-monitoring private IP
+    ports:
+      - name: otlp-grpc
+        port: 4317
+        protocol: TCP
+      - name: otlp-http
+        port: 4318
+        protocol: TCP
