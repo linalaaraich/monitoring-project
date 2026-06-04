@@ -222,15 +222,13 @@ services:
     user: "0:0"
     volumes:
       - ./otel-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      # G2: read every container's json-log; the OTTL map keys service_name off
+      # the container ID in the file path (id→name gathered at apply time).
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      # G2: the `container` operator enriches each log line with the real
-      # container.name (not just the id hash) by querying the Docker API.
-      # Read-only socket mount; the collector already runs as root (user 0:0).
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      # G5: tail the host journal so Ollama's systemd-unit logs (a HOST unit,
-      # not a container — filelog never sees it) ship to Loki. Read-only.
-      - /var/log/journal:/var/log/journal:ro
-      - /run/log/journal:/run/log/journal:ro
+      # G5: Ollama is a HOST systemd unit; a systemd drop-in mirrors its
+      # stdout/stderr to this file (the collector image has no journalctl to
+      # read journald), and filelog tails it as service_name=ollama.
+      - /var/log/ollama:/var/log/ollama:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     restart: unless-stopped
     # No healthcheck - the contrib image is distroless (no shell). The

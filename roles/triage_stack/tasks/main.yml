@@ -35,6 +35,17 @@
     mode: "0644"
   notify: restart triage stack
 
+# G2: docker json-file log paths carry only the container ID, and the OTel
+# `container` operator's add_metadata_from_filepath resolves NAMES only for the
+# k8s path pattern — so docker logs fell back to one `gpu-stack` stream. Gather
+# the live id→name map and template per-id OTTL rules so each container gets its
+# own service_name stream. Re-rendered on every apply (IDs change on recreate).
+- name: Gather running container id→name map (G2 per-container log naming)
+  command: "docker ps --no-trunc --format '{% raw %}{{.ID}} {{.Names}}{% endraw %}'"
+  register: triage_docker_ps
+  changed_when: false
+  check_mode: false
+
 - name: Template the OTel Collector config
   template:
     src: otel-config.yaml.j2
@@ -74,6 +85,46 @@
     group: ubuntu
     mode: "0600"
   notify: restart triage stack
+
+# G5: redirect the Ollama host systemd unit's stdout/stderr to a tailable file
+# so the collector (which has no journalctl to read journald) can ship its logs
+# as service_name=ollama. Applying the drop-in requires an ollama restart
+# (brief — triage cold-start/retry covers the gap). GATED behind apply.
+- name: Ensure ollama log dir + systemd drop-in dir exist (G5)
+  become: true
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /var/log/ollama
+    - /etc/systemd/system/ollama.service.d
+  when: triage_stack_apply | bool
+
+- name: Mirror the ollama unit's output to a tailable log file (G5)
+  become: true
+  copy:
+    dest: /etc/systemd/system/ollama.service.d/cires-logfile.conf
+    mode: "0644"
+    content: |
+      # Managed by ansible (roles/triage_stack, G5). The OTel collector image has
+      # no journalctl, so mirror this unit's output to a file the filelog receiver
+      # tails as service_name=ollama.
+      [Service]
+      StandardOutput=append:/var/log/ollama/ollama.log
+      StandardError=append:/var/log/ollama/ollama.log
+  register: ollama_logfile_dropin
+  when: triage_stack_apply | bool
+
+- name: Reload systemd + restart ollama to apply the log drop-in (G5)
+  become: true
+  systemd:
+    name: ollama
+    state: restarted
+    daemon_reload: true
+  when:
+    - triage_stack_apply | bool
+    - ollama_logfile_dropin is changed
 
 # --- Compose lifecycle: GATED. Only runs when explicitly opted in. ----------
 - name: Pull GHCR images
