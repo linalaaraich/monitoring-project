@@ -1,0 +1,28 @@
+# Surgical apply of the Grafana provisioned alert rules WITHOUT the role's
+# "restart stack" handler (which restarts the whole monitoring compose).
+# Renders alertrules.yml.j2 with the same inventory vars as the role, then
+# hot-reloads Grafana's alerting provisioning via the admin API.
+# Throwaway: `ansible-playbook -i inventory/newacct.yml _apply_alertrules.yml`
+- hosts: monitoring
+  gather_facts: false
+  become: true
+  vars:
+    grafana_provisioning_dir: /etc/grafana/provisioning
+  tasks:
+    - name: Render Grafana alert rules (no stack restart)
+      template:
+        src: "{{ playbook_dir }}/roles/grafana/templates/alertrules.yml.j2"
+        dest: "{{ grafana_provisioning_dir }}/alerting/alertrules.yml"
+        owner: "472"
+        group: "472"
+        mode: "0644"
+
+    - name: Hot-reload Grafana alerting provisioning (no restart)
+      become: false
+      uri:
+        url: "http://localhost:{{ grafana_port | default(3000) }}/api/admin/provisioning/alerting/reload"
+        method: POST
+        user: admin
+        password: admin
+        force_basic_auth: true
+        status_code: [200, 202]

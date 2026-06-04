@@ -692,6 +692,62 @@ groups:
     folder: Provisioned Alerts
     interval: 60s
     rules:
+      # Generic workload-down — fires for ANY deployment with unavailable
+      # replica(s), so liveness coverage is AUTOMATIC for every service
+      # (current and future) with zero per-service rules to maintain. Driven
+      # by kube-state-metrics; routes to triage via the default notification
+      # policy. NOTE: KSM is scraped via pod annotations, so Prometheus
+      # clobbers the metric's own `namespace` with the KSM pod's ns — the REAL
+      # namespace is `exported_namespace`. noDataState: Alerting makes it a
+      # watchdog (if KSM itself disappears, alert rather than go silent).
+      # (2026-06-04 — audit P0.1/A-2; the no-alert-on-app-down outage.)
+      - uid: kube-workload-down
+        title: KubeWorkloadDown
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'max by (namespace, service) (label_replace(label_replace(kube_deployment_status_replicas_unavailable{exported_namespace!="kube-system"}, "namespace", "$1", "exported_namespace", "(.+)"), "service", "$1", "deployment", "(.+)"))'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+        noDataState: Alerting
+        execErrState: Error
+        for: 3m
+        # service + namespace are minted as REAL labels by the label_replace in
+        # the query above (Grafana carries query-result labels onto the alert),
+        # so the down workload is named in the alert and the triage pipeline gets
+        # a real affected_service (was "unknown"). NOTE: Grafana does NOT template
+        # the `labels:` block — only annotations — so these must come from the
+        # query (label_replace), not from label templating in this block.
+        labels:
+          severity: critical
+          signal: availability
+          component: k8s
+          timeframe: 10m
+        annotations:
+          summary: 'Workload {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.service {{ "}}" }} has unavailable replica(s)'
+          description: 'Deployment {{ "{{" }} $labels.service {{ "}}" }} in namespace {{ "{{" }} $labels.namespace {{ "}}" }} has had unavailable replica(s) for 3m (kube_deployment_status_replicas_unavailable > 0). Generic across all services via kube-state-metrics. Check: kubectl -n {{ "{{" }} $labels.namespace {{ "}}" }} get deploy {{ "{{" }} $labels.service {{ "}}" }} and pod events.'
+
       # Pod-level memory pressure (added 2026-04-28 PM after chaos run 3
       # found 0/4 captures — the host-level HighMemoryUsage rule above
       # measures node_memory_*, not the per-pod cgroup, so pod-scoped

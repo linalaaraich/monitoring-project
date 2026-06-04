@@ -155,3 +155,20 @@
       command: kubectl rollout status daemonset/node-exporter -n observability --timeout=90s
       changed_when: false
       tags: [node-exporter]
+
+    # ---------------------------------------------------------------
+    # kube-state-metrics (audit A-2, 2026-06-04)
+    #
+    # Cluster-wide workload state (deployment/pod/replica/restart metrics) — the
+    # "is any workload down" signal behind the generic KubeWorkloadDown alert.
+    # Was entirely absent on the new account. Scraped by the existing
+    # kubernetes-pods SD via the pod annotations baked into the manifest.
+    # ---------------------------------------------------------------
+    - name: Apply kube-state-metrics
+      command: kubectl apply -f {{ manifests_dir }}/kube-state-metrics/kube-state-metrics.yaml
+      tags: [kube-state-metrics, prometheus]
+
+    - name: Wait for kube-state-metrics to roll out
+      command: kubectl rollout status deployment/kube-state-metrics -n observability --timeout=120s
+      changed_when: false
+      tags: [kube-state-metrics, prometheus]
