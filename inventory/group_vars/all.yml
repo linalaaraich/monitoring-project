@@ -45,7 +45,12 @@ network_vm_ip: "<UNUSED_K3S_PATH>"
 ai_vm_ip: "<UNUSED_K3S_PATH>"
 
 # AWS managed services — update from Terraform outputs
-rds_endpoint: "observability-rca-mysql.ccle6aaiufrf.us-east-1.rds.amazonaws.com"
+# 2026-06-04 (NEW-4): the previous default pointed at the torn-down OLD-account
+# RDS (observability-rca-mysql.ccle6aaiufrf...) — masked only by the newacct.yml
+# host_var override, the same drift class that caused the original outage. A
+# group_vars default must never reference a destroyed host. Corrected to the
+# live new-account RDS endpoint.
+rds_endpoint: "observability-rca-newacct-mysql.culs6qk8ak36.us-east-1.rds.amazonaws.com"
 rds_port: 3306
 cloudfront_domain: "<DISABLED_see_enable_cloudfront>"
 

@@ -56,6 +56,7 @@
     _effective_smtp_password: >-
       {{ lookup('env', 'GRAFANA_SMTP_PASSWORD')
          | default(current_smtp_pw.stdout | default('') | trim, true) }}
+  no_log: true   # NEW-1: holds the cleartext SMTP app-password — never log it
 
 - name: Template the .env file
   ansible.builtin.template:
@@ -64,6 +65,7 @@
     mode: '0600'  # contains SMTP password — keep tight
     backup: yes   # keep a .bak so hand-edits can be diff'd if accidentally overwritten
   register: env_templated
+  no_log: true   # NEW-1: renders SMTP_PASSWORD; suppress cleartext in --diff/CI output
   vars:
     laptop_smtp_password: "{{ _effective_smtp_password }}"
 

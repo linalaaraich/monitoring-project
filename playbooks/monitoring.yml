@@ -28,7 +28,14 @@
       template:
         src: "{{ playbook_dir }}/templates/monitoring-compose.yml.j2"
         dest: "{{ stack_dir }}/docker-compose.yml"
-        mode: "0644"
+        owner: root
+        group: root
+        # 0640, not 0644 (NEW-1): the rendered compose carries GF_SMTP_PASSWORD
+        # and GF_SECURITY_ADMIN_PASSWORD — must not be world-readable on the host.
+        mode: "0640"
+      # no_log (NEW-1): this template renders the Gmail SMTP app-password and the
+      # Grafana admin password. Without no_log, --diff/CI echo the cleartext secret.
+      no_log: true
 
     - name: Start monitoring stack
       community.docker.docker_compose_v2:

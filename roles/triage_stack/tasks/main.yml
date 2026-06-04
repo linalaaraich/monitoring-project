@@ -84,6 +84,9 @@
     owner: ubuntu
     group: ubuntu
     mode: "0600"
+  # no_log (NEW-1): .env renders SMTP_PASSWORD + Grafana API password; suppress
+  # cleartext in --diff/CI output (file is already 0600 + gitignored on disk).
+  no_log: true
   notify: restart triage stack
 
 # G5: redirect the Ollama host systemd unit's stdout/stderr to a tailable file

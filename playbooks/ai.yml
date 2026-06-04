@@ -36,7 +36,12 @@
       template:
         src: "{{ playbook_dir }}/templates/ai-compose.yml.j2"
         dest: "{{ stack_dir }}/docker-compose.yml"
-        mode: "0644"
+        owner: root
+        group: root
+        # 0640, not 0644 (NEW-1): renders SMTP_PASSWORD — not world-readable.
+        mode: "0640"
+      # no_log (NEW-1): renders the SMTP app-password; suppress cleartext in --diff/CI.
+      no_log: true
 
     - name: Start AI stack
       community.docker.docker_compose_v2:
