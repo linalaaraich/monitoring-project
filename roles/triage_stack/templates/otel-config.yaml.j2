@@ -5,11 +5,18 @@
 # {{ triage_stack_dir }}/otel-config.yaml. DO NOT EDIT BY HAND.
 #
 # Ships, to the central monitoring VM:
-#   - per-container stdout/stderr for the triage + 6 ai-* containers, each
-#     labelled with its REAL container name (G2 — was all `gpu-stack`)
+#   - per-container stdout/stderr for the triage + 6 ai-* containers (G2)
 #   - the Ollama HOST systemd unit's journal (G5 — was never shipped; Ollama
 #     is a host unit, not a container, so filelog never saw it)
 # all to the central Loki via Loki's native OTLP ingest (/otlp).
+#
+# G2 HONESTY CAVEAT (2026-06-04 PM audit): the per-id service.name mapping below
+# is PARTIAL and FRAGILE. It pins service.name from the live container-id→name
+# map gathered at apply time, so a container RECREATE (new id) silently falls
+# back to `gpu-stack` until the next ansible run. This is a known stopgap, NOT a
+# closed item — the correct fix is Docker service-discovery (Alloy/Promtail or
+# the receiver_creator), folded into Sprint 5 (EPIC13/observability). G5 (the
+# Ollama host-unit log file) IS stable and complete.
 #
 # Network: bridge; Tailscale MagicDNS resolves via the host resolver inherited
 # from /etc/resolv.conf, same as the MCP containers.
