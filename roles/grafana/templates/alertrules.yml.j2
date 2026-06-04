@@ -898,7 +898,7 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: 'rate(loki_distributor_bytes_received_total[5m])'
+              expr: 'sum(rate(loki_distributor_bytes_received_total[5m]))'
               instant: false
               range: true
               intervalMs: 15000
