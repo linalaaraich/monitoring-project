@@ -1,0 +1,35 @@
+---
+# =============================================================================
+# vault.example.yml — TEMPLATE for the encrypted secrets file.
+#
+# This committed file is a PLAINTEXT TEMPLATE with placeholders only — it holds
+# NO real secrets and is safe to commit. To use it:
+#
+#   1. Copy it to a real (untracked) vault file:
+#        cp inventory/group_vars/vault.example.yml inventory/group_vars/vault.yml
+#   2. Fill in the real secret values below.
+#   3. Encrypt it:
+#        ansible-vault encrypt inventory/group_vars/vault.yml
+#   4. Run with the vault, EITHER by passing it explicitly:
+#        ansible-playbook -i inventory/my-env.yml playbooks/monitoring.yml \
+#          -e @inventory/group_vars/vault.yml --ask-vault-pass
+#      or by configuring a vault password file in ansible.cfg.
+#
+# WHY NOT group_vars/all/vault.yml (auto-loaded dir)?
+#   group_vars/all.yml already exists as a FILE. Ansible forbids BOTH a file
+#   (all.yml) AND a directory (all/) for the same group — it errors out. So we
+#   do NOT create a group_vars/all/ directory. Instead the operator supplies the
+#   real vault via `-e @inventory/group_vars/vault.yml`, OR adds these vars to
+#   their own inventory's host/group vars. (Our live newacct.yml keeps all.yml as
+#   a file and is unaffected.)
+# =============================================================================
+
+# Grafana admin login password. The genericized group_vars/monitoring.yml
+# default is `grafana_admin_password: "{{ vault_grafana_admin_password }}"` with
+# NO weak fallback, so this MUST be supplied.
+vault_grafana_admin_password: "CHANGE_ME_grafana_admin_password"
+
+# SMTP app-password for the alert/escalation email sender (e.g. a Gmail App
+# Password). Used by grafana_smtp_password. As a fallback the deploy also accepts
+# the controller env var GRAFANA_SMTP_PASSWORD, but the vault is preferred.
+vault_smtp_password: "CHANGE_ME_smtp_app_password"

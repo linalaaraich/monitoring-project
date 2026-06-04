@@ -2,6 +2,10 @@
 - name: Common setup for monitoring hosts
   hosts: monitoring
   roles:
+    # preflight FIRST: fail fast with a clear message if required vars/secrets
+    # are unset or still a CHANGE_ME placeholder (BYO-cluster decoupling,
+    # 2026-06-04). Passes for newacct.yml (real values incl. admin/admin).
+    - preflight
     - common
     - docker
     - node_exporter

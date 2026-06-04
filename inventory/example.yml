@@ -1,0 +1,105 @@
+---
+# =============================================================================
+# example.yml — BRING-YOUR-OWN-INFRASTRUCTURE inventory TEMPLATE.
+#
+# This is the clean fill-in template for deploying the observability + AI triage
+# platform on YOUR OWN infrastructure: a monitoring host + a GPU host + your
+# EXISTING Kubernetes cluster ("bring your own cluster"). It is NOT tied to any
+# AWS account or Tailscale tailnet.
+#
+# ---- HOW TO USE ------------------------------------------------------------
+#   1. Copy this file:
+#        cp inventory/example.yml inventory/my-env.yml
+#   2. Fill in every CHANGE_ME / <...> value below (host_vars per host + the
+#      inventory-wide `vars:` at the bottom).
+#   3. Supply the secrets via a vault (see inventory/group_vars/vault.example.yml):
+#        cp inventory/group_vars/vault.example.yml inventory/group_vars/vault.yml
+#        # edit, then:  ansible-vault encrypt inventory/group_vars/vault.yml
+#   4. Run the playbooks against your inventory:
+#        ansible-playbook -i inventory/my-env.yml playbooks/monitoring.yml \
+#          -e @inventory/group_vars/vault.yml --ask-vault-pass
+#        ansible-playbook -i inventory/my-env.yml playbooks/gpu-host.yml \
+#          -e @inventory/group_vars/vault.yml --ask-vault-pass
+#        ansible-playbook -i inventory/my-env.yml playbooks/k8s-manifests.yml \
+#          -e @inventory/group_vars/vault.yml --ask-vault-pass
+#
+#   DO NOT run playbooks/k3s.yml — that BOOTSTRAPS a new k3s cluster. You bring
+#   your own cluster, so there is no k3s_cluster bootstrap group here. Make sure
+#   your kubeconfig/kubectl on the control machine points at your cluster before
+#   running k8s-manifests.yml.
+#
+# ---- CONTROL-MACHINE PREREQUISITES -----------------------------------------
+#   ansible, kubectl (configured for your cluster), helm, rsync. See
+#   requirements.yml for the Ansible roles/collections to install with
+#   `ansible-galaxy install -r requirements.yml`.
+# =============================================================================
+
+all:
+  children:
+    # -------------------------------------------------------------------------
+    # monitoring — the observability stack host (Prometheus, Grafana, Loki,
+    # Jaeger, OTel Collector). One host.
+    # -------------------------------------------------------------------------
+    monitoring:
+      hosts:
+        monitoring-host:
+          ansible_host: "CHANGE_ME_monitoring_host_address"   # SSH-reachable hostname/IP
+          ansible_user: "CHANGE_ME_ssh_user"                  # remote user with passwordless sudo
+          # Routable IP/hostname other services use to reach this host (lands in
+          # Prometheus scrape targets + in-container configs). Prefer an IP if
+          # your container networks don't inherit the host's DNS resolver.
+          monitoring_vm_ip: "CHANGE_ME_monitoring_host_ip"
+          # Public/operator-facing host used to build browser URLs (Grafana
+          # links in alert emails). Defaults to monitoring_vm_ip if you omit it.
+          monitoring_vm_public_ip: "CHANGE_ME_monitoring_public_host"
+          # Your Kubernetes API endpoint for Prometheus discovery (+ the
+          # node-level scrape target for the cluster host).
+          k3s_host_ip: "CHANGE_ME_kubernetes_api_endpoint"
+          # Public-facing Grafana URL (used in alert email "View Alert" links).
+          grafana_external_url: "http://CHANGE_ME_monitoring_public_host:3000"
+          # Where Grafana posts alerts. Direct default points at the triage
+          # orchestrator on the GPU host. Set to a fronting URL if you have one.
+          triage_service_webhook_url: "http://CHANGE_ME_gpu_host_ip:8090/webhook/grafana"
+          # SMTP identity for alert/escalation emails (the secret password comes
+          # from the vault — see vault.example.yml).
+          smtp_username: "CHANGE_ME_smtp_sender@example.com"
+          smtp_from: "CHANGE_ME_smtp_sender@example.com"
+          alert_email_to: "CHANGE_ME_alert_recipient@example.com"
+          # Optional: external managed DB endpoint. BYO deployments usually run
+          # their own / in-cluster DB — leave empty if so.
+          rds_endpoint: ""
+          rds_port: 3306
+
+    # -------------------------------------------------------------------------
+    # gpu_triage — the GPU host that runs Ollama + the AI triage pipeline.
+    # Deployed from bare OS by playbooks/gpu-host.yml. One host.
+    # -------------------------------------------------------------------------
+    gpu_triage:
+      hosts:
+        gpu-host:
+          ansible_host: "CHANGE_ME_gpu_host_address"   # SSH-reachable hostname/IP
+          ansible_user: "CHANGE_ME_ssh_user"
+          # Address the central Prometheus uses to scrape this GPU host, and that
+          # the triage webhook default points at.
+          gpu_host_ip: "CHANGE_ME_gpu_host_ip"
+          # The triage host reaches the monitoring stack at this host (Loki /
+          # Grafana / Prometheus / Jaeger). Usually = the monitoring host.
+          triage_monitoring_host: "CHANGE_ME_monitoring_host_ip"
+          # Ollama model to run on the GPU. 14b suits a ~24GB GPU; pick a smaller
+          # tag (e.g. qwen2.5:7b) for a smaller card.
+          llm_model: "qwen2.5:14b"
+
+  # ---------------------------------------------------------------------------
+  # Inventory-wide vars (apply to every host unless overridden per-host).
+  # ---------------------------------------------------------------------------
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    # SSH private key the control machine uses to reach the hosts above.
+    ansible_ssh_private_key_file: "CHANGE_ME_path_to_ssh_private_key"
+    # System timezone applied to managed hosts.
+    timezone: "CHANGE_ME_Region/City"        # e.g. "Europe/Madrid"
+    # NTP servers for time sync (alert timestamps + trace correlation depend on
+    # accurate clocks).
+    ntp_servers:
+      - "CHANGE_ME_ntp_server_1"             # e.g. 0.pool.ntp.org
+      - "CHANGE_ME_ntp_server_2"             # e.g. 1.pool.ntp.org

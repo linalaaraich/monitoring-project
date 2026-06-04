@@ -1,0 +1,73 @@
+---
+# preflight — fail fast with a clear message when required vars/secrets are
+# missing or still set to a CHANGE_ME placeholder. Added 2026-06-04 as part of
+# decoupling the platform for BYO-cluster deployment: the genericized group_vars
+# defaults are LOUD placeholders, so a fresh operator who forgets to fill them in
+# must get an actionable error before any service is deployed with a broken value.
+#
+# IMPORTANT: this role must PASS for our live newacct.yml run. It only rejects
+# undefined / empty / CHANGE_ME* values — it does NOT reject weak-but-real values
+# like grafana_admin_password="admin" (that is the current live credential).
+
+- name: Preflight — assert required deployment variables are set
+  ansible.builtin.assert:
+    that:
+      - monitoring_vm_ip is defined
+      - (monitoring_vm_ip | string | length) > 0
+      - not (monitoring_vm_ip | string).startswith('CHANGE_ME')
+    fail_msg: >-
+      monitoring_vm_ip is not set. Set it as a host_var in your inventory
+      (the routable IP/hostname of the monitoring host). See inventory/example.yml.
+    success_msg: "monitoring_vm_ip is set ({{ monitoring_vm_ip }})."
+
+- name: Preflight — assert k3s_host_ip is set
+  ansible.builtin.assert:
+    that:
+      - k3s_host_ip is defined
+      - (k3s_host_ip | string | length) > 0
+      - not (k3s_host_ip | string).startswith('CHANGE_ME')
+    fail_msg: >-
+      k3s_host_ip is not set. Set it as a host_var to your Kubernetes API
+      endpoint (used for Prometheus cluster discovery + the k3s-node scrape).
+    success_msg: "k3s_host_ip is set ({{ k3s_host_ip }})."
+
+- name: Preflight — assert SMTP identity is set
+  ansible.builtin.assert:
+    that:
+      - smtp_username is defined
+      - (smtp_username | string | length) > 0
+      - not (smtp_username | string).startswith('CHANGE_ME')
+      - alert_email_to is defined
+      - (alert_email_to | string | length) > 0
+      - not (alert_email_to | string).startswith('CHANGE_ME')
+    fail_msg: >-
+      smtp_username / alert_email_to are not set. Set them as host_vars (the SMTP
+      sender mailbox and the alert recipient). See inventory/example.yml.
+    success_msg: "SMTP identity is set (user={{ smtp_username }}, to={{ alert_email_to }})."
+
+- name: Preflight — assert the Grafana admin password secret is supplied
+  # NOTE: "admin" is deliberately accepted (current live value). We only reject
+  # an undefined / empty / placeholder password. Supply via vault_grafana_admin_password
+  # (see inventory/group_vars/vault.example.yml) or a host_var.
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - grafana_admin_password is defined
+      - (grafana_admin_password | string | length) > 0
+      - not (grafana_admin_password | string).startswith('CHANGE_ME')
+    fail_msg: >-
+      grafana_admin_password is not set. Supply vault_grafana_admin_password via your
+      vault (-e @inventory/group_vars/vault.yml --ask-vault-pass) or set
+      grafana_admin_password as a host_var. See inventory/group_vars/vault.example.yml.
+    success_msg: "grafana_admin_password is supplied."
+
+- name: Preflight — assert the SMTP password secret is supplied
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - (grafana_smtp_password | default('') | string | length) > 0
+      - not (grafana_smtp_password | default('') | string).startswith('CHANGE_ME')
+    fail_msg: >-
+      The SMTP password is not set. Supply vault_smtp_password via your vault, or
+      export GRAFANA_SMTP_PASSWORD on the controller. See inventory/group_vars/vault.example.yml.
+    success_msg: "SMTP password is supplied."
