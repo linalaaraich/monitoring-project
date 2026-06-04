@@ -4,11 +4,12 @@ prometheus_port: 9090
 # Public-facing Grafana URL used in webhook payloads and email links. Without
 # this Grafana defaults to http://localhost:3000 for every generated URL,
 # which means the triage escalation email's "View Alert" link is useless
-# on the recipient's machine. Using the monitoring VM's public EIP here so
-# the links work from anywhere (including from the laptop over public WAN
-# if the tailnet is down). If EIPs drift on redeploy, switch to the tailnet
-# MagicDNS hostname (http://observability-rca-monitoring:3000).
-grafana_external_url: "http://52.202.21.192:3000"
+# on the recipient's machine. Default to the tailnet MagicDNS hostname so it
+# survives EIP drift / account migrations (newacct.yml overrides this per-host
+# to the same name, but the default must not point at a dead resource).
+# 2026-06-04 (A-5): was the old-account EIP http://52.202.21.192:3000 — that
+# host was torn down 2026-06-02. Switched to the MagicDNS hostname.
+grafana_external_url: "http://observability-rca-newacct-monitoring:3000"
 
 # Grafana SMTP config — Gmail App Password
 # Generate app password: Google Account → Security → 2-Step Verification → App Passwords

@@ -16,8 +16,11 @@ mcp_image_tag: "laptop-dev"
 laptop_ollama_model: "qwen2.5:7b"
 
 # Monitoring-vm endpoints (MCPs query these). Tailnet MagicDNS preferred
-# over EIPs so re-provisioning doesn't break the link.
-monitoring_vm_ip: "100.74.21.104"    # observability-rca-monitoring tailnet IP
+# over EIPs so re-provisioning doesn't break the link. The laptop is itself a
+# tailnet node, so MagicDNS resolves here (unlike Docker-bridge containers).
+# 2026-06-04 (A-6): was the old-account tailnet IP 100.74.21.104
+# (observability-rca-monitoring) — that host was torn down 2026-06-02.
+monitoring_vm_ip: "observability-rca-newacct-monitoring"    # new-account monitoring host (MagicDNS)
 
 # Grafana public URL for email + backfill API. Same monitoring VM, port 3000.
 laptop_grafana_url: "http://{{ monitoring_vm_ip }}:3000"

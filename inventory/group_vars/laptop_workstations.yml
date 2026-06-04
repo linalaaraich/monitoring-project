@@ -12,9 +12,11 @@ mcp_image_tag: "laptop-dev"
 # Current model on the GPU laptop
 laptop_ollama_model: "qwen2.5:7b"
 
-# Monitoring-vm tailscale IP (resolves via MagicDNS from adolin-wsl too)
-monitoring_vm_ip: "100.74.21.104"
-laptop_grafana_url: "http://100.74.21.104:3000"
+# Monitoring-vm tailscale hostname (resolves via MagicDNS from adolin-wsl).
+# 2026-06-04 (A-6): was the old-account tailnet IP 100.74.21.104 — that host
+# was torn down 2026-06-02. Use the new-account MagicDNS name.
+monitoring_vm_ip: "observability-rca-newacct-monitoring"
+laptop_grafana_url: "http://{{ monitoring_vm_ip }}:3000"
 
 # The MCP images (cires/mcp-*:laptop-dev) are LOCAL-ONLY builds on adolin-wsl
 # — never pushed to a registry. A bulk `docker compose pull` would try to
