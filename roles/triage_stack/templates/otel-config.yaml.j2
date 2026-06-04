@@ -16,20 +16,39 @@
 # =============================================================================
 
 receivers:
-  # --- Container stdout/stderr, enriched with the REAL container name (G2) ---
-  # The `container` operator (contrib) natively parses Docker json-log format
-  # AND, with add_metadata_from_filepath + the mounted docker.sock, resolves
-  # the container id in the file path to its container.name / image. That gives
-  # us a per-service stream instead of one undifferentiated `gpu-stack`.
+  # --- Container stdout/stderr → per-service Loki stream (G2) ---
+  # docker json-file lines are {"log","stream","time"}; json_parser pulls the
+  # message out, then we set service.name on the RESOURCE directly from the
+  # container ID in the log file path (the id→name map is gathered live at apply
+  # time — see the docker-ps task). Done in stanza, NOT the k8s-oriented
+  # `container` operator (which errors "failed to detect a valid log path" on
+  # docker paths in 0.120). Each ai-* container gets its own stream; unknown
+  # ids fall back to gpu-stack.
   filelog/containers:
     include:
       - /var/lib/docker/containers/*/*-json.log
     start_at: end
     include_file_path: true
     operators:
-      - type: container
-        format: docker
-        add_metadata_from_filepath: true
+      - type: json_parser
+        parse_from: body
+      - type: move
+        from: attributes.log
+        to: body
+        if: "attributes.log != nil"
+{% for _line in (triage_docker_ps.stdout_lines | default([])) %}
+{% set _p = _line.split() %}
+{% if _p | length >= 2 %}
+      - type: add
+        field: resource["service.name"]
+        value: "{{ _p[1] }}"
+        if: 'attributes["log.file.path"] matches "{{ _p[0] }}"'
+{% endif %}
+{% endfor %}
+      - type: add
+        field: resource["service.name"]
+        value: "gpu-stack"
+        if: 'resource["service.name"] == nil'
 
   # --- Ollama host unit logs (G5) ---
   # Ollama is a HOST systemd unit, so its logs go to journald — which this image
@@ -52,33 +71,9 @@ processors:
         key: deployment.environment
         value: cires
 
-  # G2: map each container's log-file path (which carries the full container ID
-  # — the docker json-log path is /var/lib/docker/containers/<ID>/<ID>-json.log)
-  # to its real name, so each ai-* container gets its own Loki stream
-  # (service_name=ai-triage-service / ai-mcp-prometheus / ...). The id→name map
-  # is gathered live at apply time (see the docker-ps task) and templated here;
-  # `log.file.path` is a resource attribute (it surfaces as the log_file_path
-  # Loki label). Falls back to gpu-stack if no id matches.
-  transform/container_name:
-    log_statements:
-      - context: resource
-        statements:
-{% for _line in (triage_docker_ps.stdout_lines | default([])) %}
-{% set _p = _line.split() %}
-{% if _p | length >= 2 %}
-          - set(attributes["service.name"], "{{ _p[1] }}") where attributes["log.file.path"] != nil and IsMatch(attributes["log.file.path"], "{{ _p[0] }}")
-{% endif %}
-{% endfor %}
-          - set(attributes["service.name"], "gpu-stack") where attributes["service.name"] == nil
-
-  # G2 prerequisite: filelog emits log.file.path as a LOG-record attribute, so a
-  # resource-context match on it never fires. Regroup logs by log.file.path so it
-  # becomes a per-file RESOURCE attribute — then transform/container_name (resource
-  # context) can match it and set a per-file service.name that Loki uses as the
-  # stream label.
-  groupbyattrs/file:
-    keys:
-      - log.file.path
+  # (G2 service.name is now set directly in the filelog stanza operators above —
+  # the OTTL/groupbyattrs resource-context approach didn't fire because filelog's
+  # log.file.path isn't where a resource-context match could see it.)
 
   # G5: tag the Ollama log-file stream.
   resource/ollama:
@@ -111,7 +106,7 @@ service:
     # Container logs -> per-service stream (G2).
     logs/containers:
       receivers: [filelog/containers]
-      processors: [resource/common, groupbyattrs/file, transform/container_name, batch]
+      processors: [resource/common, batch]
       exporters: [otlphttp/loki]
     # Ollama host-unit log file -> service_name=ollama (G5).
     logs/ollama:
