@@ -8,7 +8,9 @@
 
 set -euo pipefail
 
-MONITORING_HOST="${MONITORING_HOST:-deploy@52.202.21.192}"
+# Default to the new-account monitoring host (MagicDNS). Was the old-account
+# EIP deploy@52.202.21.192 until 2026-06-04 — that host was torn down 2026-06-02.
+MONITORING_HOST="${MONITORING_HOST:-deploy@observability-rca-newacct-monitoring}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/ansible_key}"
 DASH_DIR="$(cd "$(dirname "$0")/.."; pwd)/roles/grafana/files/dashboards"
 GRAFANA_USER="${GRAFANA_USER:-admin}"

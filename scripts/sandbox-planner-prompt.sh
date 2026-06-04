@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# -----------------------------------------------------------------------------
+# STALE TOPOLOGY (2026-06-04): a Sprint-3 one-off that runs on the k3s VM and
+# execs the retired k3s `ai-stack-triage` deployment. Triage moved to the docker
+# container `ai-triage-service` on observability-gpu-uswest2-newacct in the
+# 2026-05-21 GPU migration. Host default repointed off the dead old-account IP;
+# the `k3s kubectl exec deploy/ai-stack-triage` call at the bottom still assumes
+# the retired k3s deploy and would need rework to run on the GPU host.
+# -----------------------------------------------------------------------------
 # Sprint-3 feasibility sandbox — does llama3.2:3b produce a valid
 # Planner-phase JSON on a realistic alert, without any wiring into the
 # live pipeline?
@@ -15,7 +23,8 @@
 
 set -euo pipefail
 
-K3S_HOST="${K3S_HOST:-deploy@52.5.239.234}"
+# Was deploy@52.5.239.234 (old-account k3s public IP, torn down 2026-06-02).
+K3S_HOST="${K3S_HOST:-deploy@observability-rca-newacct-k3s}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/ansible_key}"
 
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$K3S_HOST" bash -se <<'REMOTE'

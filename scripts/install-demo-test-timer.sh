@@ -1,4 +1,15 @@
 #!/usr/bin/env bash
+# -----------------------------------------------------------------------------
+# STALE TOPOLOGY (2026-06-04): this installs hourly-demo-test.sh on the k3s VM,
+# which fires against the retired k3s `ai-stack-triage` deployment. Since the
+# 2026-05-21 GPU migration triage runs as the docker container
+# `ai-triage-service` on observability-gpu-uswest2-newacct (not k3s), and the
+# "real-induction-tests-only" policy disallows the synthetic /webhook/grafana
+# POST hourly-demo-test.sh performs. The host default below is repointed off
+# the dead old-account IP so this no longer SSHes to a recycled box, but the
+# demo cadence itself needs a decision (repoint+real-induction vs retire) —
+# tracked as misc.md Issue 9. Do not rely on this until that's resolved.
+# -----------------------------------------------------------------------------
 # Install/refresh the demo-test schedule on the k3s VM as a systemd timer
 # (was cron at :15 hourly — replaced because cron can't express
 # "every 100 min" cleanly). Idempotent — safe to re-run.
@@ -21,7 +32,8 @@
 
 set -euo pipefail
 
-K3S_HOST="${K3S_HOST:-deploy@52.5.239.234}"
+# Was deploy@52.5.239.234 (old-account k3s public IP, torn down 2026-06-02).
+K3S_HOST="${K3S_HOST:-deploy@observability-rca-newacct-k3s}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/ansible_key}"
 SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.."; pwd)"

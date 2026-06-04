@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# -----------------------------------------------------------------------------
+# STALE TOPOLOGY + POLICY (2026-06-04): this execs the retired k3s
+# `ai-stack-triage` deployment (triage moved to the docker container
+# `ai-triage-service` on observability-gpu-uswest2-newacct in the 2026-05-21 GPU
+# migration) AND it POSTs a hand-built synthetic /webhook/grafana envelope,
+# which conflicts with the "real-induction-tests-only" policy (induce a real
+# breach so the real Grafana alert fires; don't fabricate the webhook). Needs a
+# decision before reuse: repoint to the GPU host + drop the synthetic POST in
+# favor of a real induction, or retire. Tracked as misc.md Issue 9.
+# -----------------------------------------------------------------------------
 # Hourly demo-dataset builder: run a load burst, fire a synthetic Grafana
 # webhook at the triage service, and log the outcome. Designed for cron on
 # the k3s VM — see scripts/install-hourly-cron.sh for setup.

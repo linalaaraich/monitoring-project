@@ -1,23 +1,45 @@
 #!/usr/bin/env bash
-# Rebuild the triage service image from a local clone of monitoring-triage-service
-# and roll the ai-stack deployment to pick it up.
+# =============================================================================
+# RETIRED 2026-06-04 — this script targets a topology that no longer exists.
+# -----------------------------------------------------------------------------
+# It deploys triage as a k3s HELM RELEASE (ai-stack / ai-stack-triage) on the
+# old-account k3s host (deploy@52.5.239.234, torn down 2026-06-02).
 #
-# Required on the control machine:
-#   - ~/.ssh/ansible_key
-#   - monitoring-triage-service cloned alongside this repo
+# Since the 2026-05-21 GPU migration, triage runs as the DOCKER container
+# `ai-triage-service` (docker compose) on the GPU host
+# `observability-gpu-uswest2-newacct` — NOT in k3s. The current redeploy flow is:
 #
-# Env overrides:
+#   1. Build + push the image to GHCR (via GitHub Actions on push to main):
+#        ghcr.io/linalaaraich/monitoring-triage-service:main
+#   2. On the GPU host:
+#        ssh ubuntu@observability-gpu-uswest2-newacct
+#        cd /opt/triage
+#        docker compose pull ai-triage-service
+#        docker compose up -d ai-triage-service
+#
+# This script is kept for historical reference only. Rewriting it for the
+# docker-host flow is tracked as misc.md Issue 2 (needs the canonical GPU-host
+# redeploy mechanism confirmed first). It hard-fails unless you opt in with
+# REDEPLOY_TRIAGE_ALLOW_RETIRED_K3S=1 (you almost certainly do not want to).
+# =============================================================================
+#
+# Env overrides (legacy k3s path):
 #   TRIAGE_REPO   path to local monitoring-triage-service clone  (default: ../monitoring-triage-service)
-#   K3S_HOST      ssh target (default: deploy@52.5.239.234)
+#   K3S_HOST      ssh target (default: deploy@observability-rca-newacct-k3s)
 #   IMAGE_TAG     tag to build (default: today's date + "b", so 2026-04-23b)
-#
-# Safe to re-run: the helm upgrade uses --reuse-values so chart-level user
-# values (monitoring.host, smtp.*) are preserved — never --reset-values.
 
 set -euo pipefail
 
+if [[ "${REDEPLOY_TRIAGE_ALLOW_RETIRED_K3S:-0}" != "1" ]]; then
+  echo "ERROR: redeploy-triage.sh is RETIRED — triage no longer runs in k3s." >&2
+  echo "Triage is the docker container ai-triage-service on observability-gpu-uswest2-newacct." >&2
+  echo "See the header of this script for the current GHCR + docker compose redeploy flow." >&2
+  echo "To run the legacy k3s path anyway: REDEPLOY_TRIAGE_ALLOW_RETIRED_K3S=1 $0" >&2
+  exit 3
+fi
+
 TRIAGE_REPO="${TRIAGE_REPO:-$(cd "$(dirname "$0")/../.."; pwd)/monitoring-triage-service}"
-K3S_HOST="${K3S_HOST:-deploy@52.5.239.234}"
+K3S_HOST="${K3S_HOST:-deploy@observability-rca-newacct-k3s}"
 IMAGE_TAG="${IMAGE_TAG:-$(date -u +%Y-%m-%d)b}"
 CHART_DIR="$(cd "$(dirname "$0")/.."; pwd)/charts/ai-stack"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/ansible_key}"

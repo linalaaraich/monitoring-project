@@ -62,11 +62,14 @@ Test contract:
 
 ## Adding a chaos action primitive
 
-Edit `scripts/chaos/lib/ssh_actions.py`. Three host targets are supported:
-- `K3S_HOST` (`observability-rca-k3s`, user `deploy`) — for kubectl / pod chaos. Joined the tailnet 2026-04-28.
-- `LAPTOP_HOST` (`adolin-wsl`, user `lina`) — for triage-side chaos.
-- `MONITORING_HOST` (`observability-rca-monitoring`, user `deploy`) — for Prometheus/Loki/Jaeger chaos.
+Edit `scripts/chaos/lib/ssh_actions.py`. Three host targets are supported
+(new account 321556173045 — old account torn down 2026-06-02; all env-overridable):
+- `K3S_HOST` (`observability-rca-newacct-k3s`, user `deploy`) — for kubectl / pod chaos.
+- `TRIAGE_HOST` (`observability-gpu-uswest2-newacct`, user `ubuntu`) — for triage-side chaos. Triage moved off the laptop onto the GPU host in the 2026-05-21 migration.
+- `MONITORING_HOST` (`observability-rca-newacct-monitoring`, user `deploy`) — for Prometheus/Loki/Jaeger chaos.
 
+Override any host via the matching env var (`K3S_HOST` / `TRIAGE_HOST` / `MONITORING_HOST`).
+Grafana creds for the preflight come from `GRAFANA_USER` / `GRAFANA_PASSWORD` (default `admin`/`admin`).
 All SSH uses `~/.ssh/ansible_key`.
 
 ## Safety

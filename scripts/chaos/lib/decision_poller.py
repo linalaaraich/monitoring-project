@@ -14,11 +14,13 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from .ssh_actions import http_get
+from .ssh_actions import TRIAGE_HOST, http_get
 
 logger = logging.getLogger(__name__)
 
-DECISIONS_URL = "http://adolin-wsl:8090/decisions?limit=20"
+# Triage moved off the laptop onto the GPU host in the 2026-05-21 migration.
+# TRIAGE_HOST is env-resolved in ssh_actions (default observability-gpu-uswest2-newacct).
+DECISIONS_URL = f"http://{TRIAGE_HOST}:8090/decisions?limit=20"
 
 
 async def get_baseline_marker() -> str:

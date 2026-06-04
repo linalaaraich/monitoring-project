@@ -6,28 +6,34 @@ controller because the kubeconfig is SG-blocked from this host (see
 2026-04-28 audit) — running on the k3s host itself with `sudo k3s
 kubectl` is the reliable path.
 
-Hosts (tailnet MagicDNS):
-  - observability-rca-k3s   — control-plane node (k3s)
-  - adolin-wsl              — laptop running triage + Ollama
-  - observability-rca-monitoring — EC2 with the docker-compose obs stack
+Hosts (tailnet MagicDNS, new account 321556173045 — old account torn down
+2026-06-02; all defaults env-overridable):
+  - observability-rca-newacct-k3s        — control-plane node (k3s)
+  - observability-gpu-uswest2-newacct    — GPU host running triage + Ollama
+                                           (triage moved off the laptop in the
+                                           2026-05-21 GPU migration)
+  - observability-rca-newacct-monitoring — EC2 with the docker-compose obs stack
 
-The user `lina@` works on adolin-wsl; `deploy@` everywhere else.
+Override any host via env (K3S_HOST / TRIAGE_HOST / MONITORING_HOST).
+`ubuntu@` on the GPU host; `deploy@` everywhere else.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shlex
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-K3S_HOST = "observability-rca-k3s"
-LAPTOP_HOST = "adolin-wsl"
-MONITORING_HOST = "observability-rca-monitoring"
+# Defaults target the new account; override via env for any other topology.
+K3S_HOST = os.getenv("K3S_HOST", "observability-rca-newacct-k3s")
+TRIAGE_HOST = os.getenv("TRIAGE_HOST", "observability-gpu-uswest2-newacct")
+MONITORING_HOST = os.getenv("MONITORING_HOST", "observability-rca-newacct-monitoring")
 
 K3S_USER = "deploy"
-LAPTOP_USER = "lina"
+TRIAGE_USER = os.getenv("TRIAGE_USER", "ubuntu")
 MONITORING_USER = "deploy"
 
 SSH_KEY = "~/.ssh/ansible_key"

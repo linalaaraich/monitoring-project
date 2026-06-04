@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -34,7 +35,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from chaos.lib.decision_poller import get_baseline_marker, poll_for_decision
 from chaos.lib.rca_scorer import score_rca
-from chaos.lib.ssh_actions import http_get
+from chaos.lib.ssh_actions import MONITORING_HOST, TRIAGE_HOST, http_get
 from chaos.tests.base import ChaosTest
 from chaos.tests.drain3_anomaly import Drain3AnomalyTest
 from chaos.tests.high_cpu_usage import HighCpuUsageTest
@@ -91,7 +92,7 @@ class ChaosResult:
 async def preflight() -> bool:
     """Verify triage healthy + 0 active alerts before starting chaos."""
     logger.info("Pre-flight: checking triage health + alert state...")
-    health = await http_get("http://adolin-wsl:8090/health")
+    health = await http_get(f"http://{TRIAGE_HOST}:8090/health")
     if not health.ok:
         logger.error("Triage /health is unreachable — aborting.")
         return False
@@ -107,8 +108,11 @@ async def preflight() -> bool:
     # Active alerts via Grafana unified-alerting API (the path below is
     # Grafana's own internal endpoint name and is required by Grafana's API
     # contract; it does not invoke any external alerting component).
+    grafana_user = os.getenv("GRAFANA_USER", "admin")
+    grafana_password = os.getenv("GRAFANA_PASSWORD", "admin")
     alerts = await http_get(
-        "http://admin:admin@observability-rca-monitoring:3000/api/alertmanager/grafana/api/v2/alerts"
+        f"http://{grafana_user}:{grafana_password}@{MONITORING_HOST}:3000"
+        "/api/alertmanager/grafana/api/v2/alerts"
     )
     active = []
     if alerts.ok and alerts.stdout:
