@@ -4,38 +4,52 @@ prometheus_port: 9090
 # Public-facing Grafana URL used in webhook payloads and email links. Without
 # this Grafana defaults to http://localhost:3000 for every generated URL,
 # which means the triage escalation email's "View Alert" link is useless
-# on the recipient's machine. Default to the tailnet MagicDNS hostname so it
-# survives EIP drift / account migrations (newacct.yml overrides this per-host
-# to the same name, but the default must not point at a dead resource).
-# 2026-06-04 (A-5): was the old-account EIP http://52.202.21.192:3000 — that
-# host was torn down 2026-06-02. Switched to the MagicDNS hostname.
-grafana_external_url: "http://observability-rca-newacct-monitoring:3000"
+# on the recipient's machine.
+# ENVIRONMENT-SPECIFIC — set per-inventory (host_vars). Genericized 2026-06-04
+# for BYO-cluster portability: derive the URL from the operator-supplied public
+# host (monitoring_vm_public_ip, falling back to monitoring_vm_ip) so it never
+# hardwires a CIRES-specific EIP/MagicDNS name into the shared default. Our
+# newacct.yml sets grafana_external_url directly as a host_var to the live
+# MagicDNS URL (http://observability-rca-newacct-monitoring:3000), which (being
+# a host_var) wins over this default — so our live value is unchanged.
+grafana_external_url: "http://{{ monitoring_vm_public_ip | default(monitoring_vm_ip) }}:{{ grafana_port }}"
 
 # Grafana SMTP config — Gmail App Password
 # Generate app password: Google Account → Security → 2-Step Verification → App Passwords
+# ENVIRONMENT-SPECIFIC SMTP identity — set per-inventory. Genericized to the
+# generic smtp_* / alert_email_to vars (defined in the operator's inventory)
+# so the SMTP sender is not hardwired to a CIRES mailbox. Our newacct.yml sets
+# smtp_username / smtp_from / alert_email_to as host_vars to laaraichlina@gmail.com.
 grafana_smtp_host: "smtp.gmail.com:587"
-grafana_smtp_user: "laaraichlina@gmail.com"
-grafana_smtp_password: "{{ lookup('env', 'GRAFANA_SMTP_PASSWORD') }}"
-grafana_smtp_from: "laaraichlina@gmail.com"
-grafana_contact_email: "laaraichlina@gmail.com"
+grafana_smtp_user: "{{ smtp_username }}"
+# Password from the vault (vault_smtp_password); falls back to the controller
+# env var GRAFANA_SMTP_PASSWORD for backward-compat with the current workflow.
+grafana_smtp_password: "{{ vault_smtp_password | default(lookup('env', 'GRAFANA_SMTP_PASSWORD')) }}"
+grafana_smtp_from: "{{ smtp_from | default(smtp_username) }}"
+grafana_contact_email: "{{ alert_email_to }}"
 
 # Triage service webhook — Grafana Alerting sends all alerts here.
-# As of 2026-05-21, the triage service runs on an AWS g5.xlarge in us-west-2
-# (instance `i-03aec662b1a47ad8f`, A10G GPU, qwen2.5:14b primary +
-# 7b fallback). Webhooks go through a Lambda autoshutoff gateway fronted by
-# API Gateway: traffic-aware lifecycle, 20-min idle stop, SQS-buffered cold
-# starts. The instance is reachable from the operator dashboard via Tailscale
-# (`observability-gpu-uswest2`), but Grafana itself posts to the public
-# API Gateway URL — Grafana doesn't need a tailnet route to reach it.
-# Prior URL (adolin-wsl laptop): http://100.117.118.70:8090/webhook/grafana
-# (kept as rollback fallback; do not delete adolin-wsl's container yet.)
-triage_service_webhook_url: "https://p2j9dqjh3h.execute-api.us-west-2.amazonaws.com/webhook/grafana"
+# ENVIRONMENT-SPECIFIC — set per-inventory (host_vars). Genericized 2026-06-04:
+# the generic default points Grafana straight at the triage orchestrator on the
+# GPU host (gpu_host_ip:triage_service_port/webhook/grafana). A BYO deployment
+# that doesn't front the triage service with a cloud API gateway gets a working
+# direct webhook out of the box.
+# OUR live deploy uses an AWS API Gateway (Lambda autoshutoff) in front of the
+# GPU box, so newacct.yml overrides this as a host_var with the API Gateway URL
+# (https://p2j9dqjh3h.execute-api.us-west-2.amazonaws.com/webhook/grafana) —
+# the host_var wins over this default, so the live webhook is unchanged.
+triage_service_webhook_url: "http://{{ gpu_host_ip }}:{{ triage_service_port | default(8090) }}/webhook/grafana"
 
 loki_port: 3100
 jaeger_port_ui: 16686
 jaeger_port_collector: 4317
 badger_data_dir: /data/badger
-grafana_admin_password: "admin"
+# ENVIRONMENT-SPECIFIC SECRET — set per-inventory via vault. Genericized
+# 2026-06-04: NO weak default — the operator MUST supply vault_grafana_admin_password
+# (see inventory/group_vars/vault.example.yml). Our newacct.yml sets
+# grafana_admin_password directly as a host_var to the current live value
+# ("admin"), so the live credential is unchanged.
+grafana_admin_password: "{{ vault_grafana_admin_password }}"
 grafana_datasources:
   - prometheus
   - loki
@@ -99,22 +113,28 @@ prometheus_targets:
 # GPU/VRAM/temp metrics) are deployed by playbooks/gpu.yml (roles/triage_stack)
 # and scraped via the gpu-node / gpu-dcgm jobs below once that apply lands.
 gpu_triage_scrape_enabled: true
-gpu_host_tailnet_ip: "100.114.76.43"   # observability-gpu-uswest2-newacct
+# ENVIRONMENT-SPECIFIC — set per-inventory. Renamed gpu_host_tailnet_ip ->
+# gpu_host_ip (generic) 2026-06-04 so it's not Tailscale-specific. This is the
+# address the central Prometheus uses to scrape the GPU triage host; for our
+# estate it's the tailnet IP of observability-gpu-uswest2-newacct. The value is
+# also set as a host_var on the gpu-host in newacct.yml for the GPU host's own
+# roles; the same value here keeps the monitoring group's scrape targets intact.
+gpu_host_ip: "100.114.76.43"   # observability-gpu-uswest2-newacct (tailnet IP)
 gpu_triage_targets:
   # Triage orchestrator — exposes the whole pipeline's metrics (the metrics
   # the triage-service-health dashboard queries). Host-published on :8090.
   - job: "ai-triage-service"
-    host: "{{ gpu_host_tailnet_ip }}"
+    host: "{{ gpu_host_ip }}"
     port: "{{ triage_service_port | default(8090) }}"
   # GPU host node-exporter (host CPU/mem/disk). Deployed by gpu.yml; the job
   # is harmless (DOWN) until the exporter container is up after that apply.
   - job: "gpu-node-exporter"
-    host: "{{ gpu_host_tailnet_ip }}"
+    host: "{{ gpu_host_ip }}"
     port: "{{ node_port }}"
   # NVIDIA DCGM-exporter (A10G utilization, VRAM, temp, power). Deployed by
   # gpu.yml; harmless (DOWN) until the exporter container is up.
   - job: "gpu-dcgm-exporter"
-    host: "{{ gpu_host_tailnet_ip }}"
+    host: "{{ gpu_host_ip }}"
     port: "9400"
 
 loki_retention_days: 7

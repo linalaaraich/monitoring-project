@@ -31,6 +31,16 @@ all:
           grafana_external_url: "http://observability-rca-newacct-monitoring:3000"
           rds_endpoint: "observability-rca-newacct-mysql.culs6qk8ak36.us-east-1.rds.amazonaws.com"
           rds_port: 3306
+          # ---- Live-value overrides for the genericized group_vars defaults ----
+          # 2026-06-04: group_vars defaults were genericized for BYO portability,
+          # so OUR concrete values are pinned here as HOST_VARS (host_vars beat
+          # group_vars — the only inventory-side scope that does). Each equals the
+          # exact value that was the group_vars default before genericization.
+          triage_service_webhook_url: "https://p2j9dqjh3h.execute-api.us-west-2.amazonaws.com/webhook/grafana"
+          grafana_admin_password: "admin"
+          smtp_username: "laaraichlina@gmail.com"
+          smtp_from: "laaraichlina@gmail.com"
+          alert_email_to: "laaraichlina@gmail.com"
     k3s_cluster:
       hosts:
         k3s-node:
@@ -43,11 +53,27 @@ all:
           grafana_external_url: "http://observability-rca-newacct-monitoring:3000"
           rds_endpoint: "observability-rca-newacct-mysql.culs6qk8ak36.us-east-1.rds.amazonaws.com"
           rds_port: 3306
+          # Mirror the live-value overrides (same pattern as monitoring-vm above).
+          triage_service_webhook_url: "https://p2j9dqjh3h.execute-api.us-west-2.amazonaws.com/webhook/grafana"
+          grafana_admin_password: "admin"
+          smtp_username: "laaraichlina@gmail.com"
+          smtp_from: "laaraichlina@gmail.com"
+          alert_email_to: "laaraichlina@gmail.com"
     gpu_triage:
       hosts:
         gpu-host:
           ansible_host: observability-gpu-uswest2-newacct
           ansible_user: ubuntu
+          # Renamed from gpu_host_tailnet_ip 2026-06-04. Tailnet IP of the GPU
+          # triage host; host_var so the GPU host's own roles resolve it.
+          gpu_host_ip: "100.114.76.43"
+          # Preserve the monitoring-host values the GPU tier relied on. Before the
+          # all.yml defaults were genericized to CHANGE_ME placeholders, the GPU
+          # host inherited these from all.yml; the triage_stack role derives
+          # triage_monitoring_host from monitoring_vm_public_ip. Pin them as
+          # host_vars here so the live GPU config is byte-for-byte unchanged.
+          monitoring_vm_ip: "10.0.1.105"
+          monitoring_vm_public_ip: "observability-rca-newacct-monitoring"
     laptop_workstations:
       hosts:
         adolin-wsl:

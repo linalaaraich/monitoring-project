@@ -31,26 +31,27 @@ firewall_docker_cidr: "172.16.0.0/12"
 # only if you have a specific non-tailnet control IP to allow.
 ansible_control_ip: ""
 
-# VM IPs — update from Terraform outputs for AWS deployment
-# Private IPs for inter-service traffic (stays inside VPC, no egress charges).
-# 2026-06-04: corrected the stale OLD-account values (private 10.0.1.68 / dead
-# EIP 52.202.21.192). New account: monitoring private IP is 10.0.1.105; operator
-# access is via Tailscale MagicDNS, so the "public" URL host is the tailnet name
-# (the old EIP is dead and would re-break the triage MCP env on apply).
-monitoring_vm_ip: "10.0.1.105"
-monitoring_vm_public_ip: "observability-rca-newacct-monitoring"  # tailnet MagicDNS; used for URLs rendered into operator browsers
+# VM IPs — SET PER-INVENTORY (host_vars), NOT here.
+# This is a SHARED default loaded by every group. Baking a concrete site IP here
+# is the drift class that caused a past outage: a torn-down host's IP lingered in
+# this shared default, masked only by a host_var override, and re-broke things on
+# apply. So the default is now a LOUD placeholder — the preflight role rejects it,
+# forcing the operator to set the real value as a host_var in their inventory.
+# Our newacct.yml sets monitoring_vm_ip / monitoring_vm_public_ip as host_vars on
+# each host, which (host_vars) beat this default — so our live deploy is unaffected.
+monitoring_vm_ip: "CHANGE_ME_monitoring_host_ip"          # private/routable IP of the monitoring host
+monitoring_vm_public_ip: "{{ monitoring_vm_ip }}"          # public/operator-facing host for browser URLs; defaults to the private IP
 # Legacy VM IPs (docker-compose path, replaced by k3s in Sprint 2 extension)
 application_vm_ip: "<UNUSED_K3S_PATH>"
 network_vm_ip: "<UNUSED_K3S_PATH>"
 ai_vm_ip: "<UNUSED_K3S_PATH>"
 
-# AWS managed services — update from Terraform outputs
-# 2026-06-04 (NEW-4): the previous default pointed at the torn-down OLD-account
-# RDS (observability-rca-mysql.ccle6aaiufrf...) — masked only by the newacct.yml
-# host_var override, the same drift class that caused the original outage. A
-# group_vars default must never reference a destroyed host. Corrected to the
-# live new-account RDS endpoint.
-rds_endpoint: "observability-rca-newacct-mysql.culs6qk8ak36.us-east-1.rds.amazonaws.com"
+# Managed database endpoint — SET PER-INVENTORY (host_vars) if you use an
+# external managed DB. BYO deployments typically run their own / in-cluster DB,
+# so the shared default is EMPTY (no hardwired managed-service hostname; the same
+# drift class as above). Our newacct.yml sets rds_endpoint as a host_var to the
+# live new-account RDS endpoint, which beats this default — live deploy unaffected.
+rds_endpoint: ""
 rds_port: 3306
 cloudfront_domain: "<DISABLED_see_enable_cloudfront>"
 
@@ -87,6 +88,12 @@ otel_collector_http_port: 4318
 otel_collector_metrics_port: 8888
 otel_collector_health_port: 13133
 
-# k3s cluster endpoints (private IPs — internal to VPC)
-k3s_host_ip: "10.0.1.194"
+# k3s cluster endpoint — SET PER-INVENTORY (host_vars). This is the Kubernetes
+# API endpoint / k3s host the central Prometheus uses for cluster discovery and
+# the k3s-node scrape target. LOUD placeholder so the preflight rejects it until
+# the operator sets the real value. newacct.yml sets it as a host_var (host_vars
+# beat this default) — live deploy unaffected.
+k3s_host_ip: "CHANGE_ME_k3s_host_ip"
+# Legacy CPU-Ollama placeholder (unused on the k3s/GPU path). The monitoring
+# group's real gpu_host_ip is set in group_vars/monitoring.yml + per-host.
 gpu_host_ip: "<UNUSED_CPU_OLLAMA>"
