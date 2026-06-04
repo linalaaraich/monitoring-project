@@ -748,6 +748,78 @@ groups:
           summary: 'Workload {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.service {{ "}}" }} has unavailable replica(s)'
           description: 'Deployment {{ "{{" }} $labels.service {{ "}}" }} in namespace {{ "{{" }} $labels.namespace {{ "}}" }} has had unavailable replica(s) for 3m (kube_deployment_status_replicas_unavailable > 0). Generic across all services via kube-state-metrics. Check: kubectl -n {{ "{{" }} $labels.namespace {{ "}}" }} get deploy {{ "{{" }} $labels.service {{ "}}" }} and pod events.'
 
+      # COMPANION to KubeWorkloadDown (2026-06-04 — audit OBS-D2). The rule above
+      # keys on kube_deployment_status_replicas_unavailable, which is only a
+      # meaningful (>0) value while a deployment EXISTS and has pods it expects
+      # to be up. It is BLIND to two cases:
+      #   1) A deployment scaled to 0 replicas that SHOULD be running N>0
+      #      (status_replicas_unavailable is 0/absent — nothing is "unavailable",
+      #      there's simply nothing scheduled), and
+      #   2) A deployment object DELETED entirely (the unavailable series stops
+      #      existing, so the rule above has no series to threshold and goes
+      #      silent rather than alerting).
+      #
+      # This rule catches both by comparing the DESIRED spec replicas against the
+      # AVAILABLE replicas: kube_deployment_spec_replicas - status_replicas_available.
+      # When spec=N and available<N (including available=0 / scaled-to-0-but-spec>0
+      # / all-pods-crashlooping) the difference is >= 1 and we fire. Because it is
+      # driven off spec_replicas (which DOES carry a value at 0-available) it
+      # covers the scaled-to-0 gap; the threshold of >=1 means a deliberately
+      # scaled-to-0 deployment (spec=0) yields 0 and does NOT fire, so it stays
+      # complementary to the rule above (no trivial double-fire: that rule keys on
+      # `unavailable`, this one on the spec-vs-available DEFICIT).
+      #
+      # Same KSM label-clobber gotcha applies: Prometheus overwrites the metric's
+      # own `namespace` with the KSM pod's ns, so the REAL namespace is in
+      # `exported_namespace`. We mirror the existing rule's double label_replace
+      # (exported_namespace -> namespace, deployment -> service) so the alert
+      # payload carries a real affected_service, not a literal {{ "{{" }} $labels.deployment {{ "}}" }}.
+      # noDataState: Alerting keeps it a watchdog if KSM itself disappears.
+      - uid: kube-workload-replicas-deficit
+        title: KubeWorkloadReplicasDeficit
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'max by (namespace, service) (label_replace(label_replace((kube_deployment_spec_replicas{exported_namespace!="kube-system"} - kube_deployment_status_replicas_available{exported_namespace!="kube-system"}), "namespace", "$1", "exported_namespace", "(.+)"), "service", "$1", "deployment", "(.+)"))'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+        noDataState: Alerting
+        execErrState: Error
+        for: 3m
+        # service + namespace are minted as REAL labels by the label_replace in
+        # the query (same pattern as KubeWorkloadDown) so the down workload is
+        # named in the alert payload. Grafana does NOT template the `labels:`
+        # block — only annotations — so these must come from the query.
+        labels:
+          severity: critical
+          signal: availability
+          component: k8s
+          timeframe: 10m
+        annotations:
+          summary: 'Workload {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.service {{ "}}" }} has fewer available than desired replicas'
+          description: 'Deployment {{ "{{" }} $labels.service {{ "}}" }} in namespace {{ "{{" }} $labels.namespace {{ "}}" }} has had a desired-vs-available replica deficit for 3m (kube_deployment_spec_replicas - kube_deployment_status_replicas_available >= 1). Catches the cases KubeWorkloadDown misses: scaled-to-0-but-should-run, all-replicas-down, or available=0. Check: kubectl -n {{ "{{" }} $labels.namespace {{ "}}" }} get deploy {{ "{{" }} $labels.service {{ "}}" }} and pod events.'
+
       # Pod-level memory pressure (added 2026-04-28 PM after chaos run 3
       # found 0/4 captures — the host-level HighMemoryUsage rule above
       # measures node_memory_*, not the per-pod cgroup, so pod-scoped
