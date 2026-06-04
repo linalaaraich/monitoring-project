@@ -1,5 +1,4 @@
 ---
-- name: restart stack
-  community.docker.docker_compose_v2:
-    project_src: "{{ stack_dir }}"
-    state: restarted
+# (No handlers needed.) The ollama service is restarted inline in tasks/main.yml
+# when the OLLAMA_HOST drop-in changes, so a notify-handler indirection isn't
+# required here.

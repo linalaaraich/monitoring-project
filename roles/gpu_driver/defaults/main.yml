@@ -1,0 +1,25 @@
+---
+# Defaults for the gpu_driver role — installs the NVIDIA GPU driver on a bare
+# Ubuntu host so the AI tier (Ollama on the host + GPU containers via the
+# NVIDIA Container Toolkit) can use the card. Designed for an NVIDIA L4 / Ada
+# Lovelace, but the package is overridable for other cards.
+
+# Driver install strategy:
+#   "package"  -> install the pinned `gpu_driver_package` below (deterministic;
+#                 recommended for reproducible supervisor bring-ups).
+#   "autodetect" -> run `ubuntu-drivers install` and let it pick the recommended
+#                 driver for whatever GPU is present.
+gpu_driver_install_method: "package"
+
+# Pinned driver package for the "package" method. The L4 (Ada Lovelace) needs a
+# driver branch >= 535. The "-server" variant tracks the long-lived datacenter
+# branch (right choice for a headless GPU host). Override for a newer branch
+# (e.g. nvidia-driver-550-server) or a desktop variant if needed.
+gpu_driver_package: "nvidia-driver-535-server"
+
+# If true, FAIL the run when `nvidia-smi` does not work after the driver
+# install (the host needs a reboot before the kernel module loads). This is the
+# safe default: it forces the operator to reboot and re-run rather than letting
+# downstream roles (nvidia_docker / ollama) appear to succeed against a card
+# the kernel can't see. Set to false to only warn (debug) and continue.
+gpu_driver_require_smi: true

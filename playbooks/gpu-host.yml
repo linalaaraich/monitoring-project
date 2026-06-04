@@ -1,0 +1,62 @@
+---
+# =============================================================================
+# gpu-host.yml — FULL FROM-BARE-OS bring-up of the AI / GPU triage tier.
+#
+# This is the one-playbook installer an operator runs against a fresh Ubuntu
+# host with an NVIDIA L4 (Ada Lovelace) to stand up the entire AI tier:
+#   common  -> docker -> gpu_driver -> nvidia_docker -> ollama -> triage_stack
+#
+# It DIFFERS from playbooks/gpu.yml: that one is the gated drift-CAPTURE path
+# (it only templates /opt/triage to match the live crown-jewel host and does
+# NOT install the driver / Docker / Ollama). THIS playbook builds the host from
+# scratch, so it INSTALLS everything and, unlike gpu.yml, sets
+# `triage_stack_apply: true` by DEFAULT so a fresh bring-up actually deploys the
+# compose stack.
+#
+# ---- REBOOT CAVEAT (read this) ---------------------------------------------
+# A fresh NVIDIA driver install needs ONE reboot before `nvidia-smi` works. The
+# gpu_driver role does NOT auto-reboot — on a bare host it will FAIL with a
+# clear "reboot and re-run" message (gpu_driver_require_smi=true). So expect:
+#       run  ->  sudo reboot  ->  run again
+# On the second run the driver install is skipped and the rest proceeds.
+#
+# ---- SMTP SECRET -----------------------------------------------------------
+# triage_stack asserts the SMTP app-password is available (from the controller
+# env var GRAFANA_SMTP_PASSWORD) before it brings the stack up, because the
+# .env carries the escalation-email password. Export it first:
+#       export GRAFANA_SMTP_PASSWORD="<gmail-app-password>"
+#
+# ---- USAGE -----------------------------------------------------------------
+#   export GRAFANA_SMTP_PASSWORD="<gmail-app-password>"
+#   ansible-playbook -i inventory/newacct.yml playbooks/gpu-host.yml
+#
+#   # First run on a truly bare host (driver not yet live) — reboot when it
+#   # fails on the driver check, then re-run the same command.
+#
+#   # Override the pinned driver for a newer branch:
+#   ansible-playbook -i inventory/newacct.yml playbooks/gpu-host.yml \
+#       -e gpu_driver_package=nvidia-driver-550-server
+#
+#   # Install the host but do NOT (re)deploy the compose stack:
+#   ansible-playbook -i inventory/newacct.yml playbooks/gpu-host.yml \
+#       -e triage_stack_apply=false
+# =============================================================================
+- name: Bring up the GPU / AI triage host from a bare Ubuntu OS
+  hosts: gpu_triage
+  become: true            # driver, Docker, toolkit, Ollama all need root
+  vars:
+    # Fresh bring-up DEPLOYS the stack by default (override with -e). The
+    # capture-only path is playbooks/gpu.yml.
+    triage_stack_apply: true
+  roles:
+    - role: common
+    - role: docker
+    - role: gpu_driver
+    - role: nvidia_docker
+    - role: ollama
+    # The compose stack + /opt/triage are owned by the `ubuntu` user (matching
+    # the live host and playbooks/gpu.yml). Run this role's compose tasks as
+    # that user; its own `become: true` tasks (systemd drop-ins) still escalate.
+    - role: triage_stack
+      become: false
+  tags: [gpu, gpu-host, triage]

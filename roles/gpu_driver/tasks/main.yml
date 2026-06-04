@@ -1,0 +1,90 @@
+---
+# =============================================================================
+# gpu_driver — install the NVIDIA GPU driver on a bare Ubuntu host (idempotent).
+#
+# Idempotency: if `nvidia-smi` already works, the whole install is skipped.
+# Reboot caveat: a fresh driver install usually needs ONE reboot before the
+# kernel module loads and `nvidia-smi` works. This role does NOT auto-reboot;
+# instead it surfaces a clear message (fail or debug, controlled by
+# `gpu_driver_require_smi`) telling the operator to reboot and re-run. See the
+# role README.
+# =============================================================================
+
+# --- Pre-check: is a working driver already present? -------------------------
+- name: Check whether nvidia-smi already works
+  command: nvidia-smi
+  register: gpu_driver_smi_pre
+  changed_when: false
+  failed_when: false
+
+- name: Report that a working driver was detected (install skipped)
+  debug:
+    msg: "nvidia-smi already works — skipping the driver install."
+  when: gpu_driver_smi_pre.rc == 0
+
+# --- Install (only when no working driver yet) -------------------------------
+- name: Install the NVIDIA driver (no working driver detected)
+  when: gpu_driver_smi_pre.rc != 0
+  block:
+    - name: Install ubuntu-drivers-common
+      apt:
+        name: ubuntu-drivers-common
+        state: present
+        update_cache: yes
+
+    # Method A: pinned package (deterministic, reproducible).
+    - name: Install the pinned NVIDIA driver package
+      apt:
+        name: "{{ gpu_driver_package }}"
+        state: present
+        update_cache: yes
+      when: gpu_driver_install_method == "package"
+
+    # Method B: autodetect — let ubuntu-drivers pick the recommended driver.
+    # `ubuntu-drivers install` is idempotent enough (no-op once installed), but
+    # we already gate the whole block on nvidia-smi failing, so it only runs on
+    # a truly fresh host.
+    - name: Autodetect + install the recommended NVIDIA driver
+      command: ubuntu-drivers install
+      register: gpu_driver_autodetect
+      changed_when: "'No drivers found' not in gpu_driver_autodetect.stdout"
+      when: gpu_driver_install_method == "autodetect"
+
+# --- Post-install verification ----------------------------------------------
+# Re-probe nvidia-smi. On a brand-new install this will typically still fail
+# until the host reboots (kernel module not yet loaded), which is expected.
+- name: Re-check nvidia-smi after install
+  command: nvidia-smi
+  register: gpu_driver_smi_post
+  changed_when: false
+  failed_when: false
+
+- name: Show nvidia-smi output (GPU present and visible)
+  debug:
+    msg: "{{ gpu_driver_smi_post.stdout_lines }}"
+  when: gpu_driver_smi_post.rc == 0
+
+# A reboot is needed: driver was just installed but the module isn't live yet.
+- name: Fail and instruct operator to reboot (driver installed, nvidia-smi not yet live)
+  fail:
+    msg: >-
+      The NVIDIA driver was installed but `nvidia-smi` does not work yet.
+      The host must be REBOOTED so the kernel module loads, then re-run this
+      playbook (the install will be skipped and downstream GPU roles will run).
+      Reboot:  sudo reboot
+      (Set gpu_driver_require_smi=false to downgrade this to a warning and
+      continue — downstream GPU roles will likely fail until the reboot.)
+  when:
+    - gpu_driver_smi_post.rc != 0
+    - gpu_driver_require_smi | bool
+
+- name: Warn that a reboot is needed (gpu_driver_require_smi=false)
+  debug:
+    msg: >-
+      WARNING: nvidia-smi does not work yet — the host needs a reboot before
+      the GPU is usable. Continuing because gpu_driver_require_smi=false, but
+      nvidia_docker / ollama GPU access will not work until you `sudo reboot`
+      and re-run.
+  when:
+    - gpu_driver_smi_post.rc != 0
+    - not (gpu_driver_require_smi | bool)

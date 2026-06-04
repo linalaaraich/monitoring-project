@@ -1,4 +1,13 @@
 ---
+# =============================================================================
+# ollama — install + run Ollama as a HOST systemd unit and pull the models.
+#
+# NOTE: the triage containers reach this at host.docker.internal:11434 (Docker's
+# host-gateway). By default Ollama binds 127.0.0.1, which containers CANNOT
+# reach via host.docker.internal — so this role installs a systemd drop-in
+# setting OLLAMA_HOST=0.0.0.0:{{ ollama_port }} (gated on `ollama_bind_all`).
+# =============================================================================
+
 - name: Create Ollama data directory
   file:
     path: "{{ ollama_data_dir }}"
@@ -6,3 +15,92 @@
     owner: root
     group: root
     mode: "0755"
+
+# --- Install (idempotent: skip if the binary is already present) -------------
+- name: Check whether ollama is already installed
+  command: which ollama
+  register: ollama_which
+  changed_when: false
+  failed_when: false
+
+- name: Install Ollama via the official installer (skipped if already present)
+  when: ollama_which.rc != 0
+  block:
+    - name: Download the Ollama install script
+      get_url:
+        url: "{{ ollama_install_script_url }}"
+        dest: /tmp/ollama-install.sh
+        mode: "0755"
+
+    # The installer is idempotent in practice, but we only reach here when the
+    # binary is absent, so this runs at most once on a fresh host. It sets up
+    # the `ollama` system user and the `ollama.service` systemd unit.
+    - name: Run the Ollama install script
+      command: /bin/sh /tmp/ollama-install.sh
+      register: ollama_install
+      changed_when: "'install complete' in (ollama_install.stdout | default('')) or ollama_install.rc == 0"
+  always:
+    - name: Remove the install script
+      file:
+        path: /tmp/ollama-install.sh
+        state: absent
+
+# --- Bind on all interfaces so containers can reach it ----------------------
+# host.docker.internal -> host bridge gateway IP, NOT 127.0.0.1. Without this
+# drop-in the triage containers get connection-refused on :11434.
+- name: Ensure the ollama systemd drop-in dir exists
+  file:
+    path: /etc/systemd/system/ollama.service.d
+    state: directory
+    mode: "0755"
+  when: ollama_bind_all | bool
+
+- name: Install the OLLAMA_HOST drop-in (bind 0.0.0.0 so containers can reach it)
+  copy:
+    dest: /etc/systemd/system/ollama.service.d/cires-host.conf
+    mode: "0644"
+    content: |
+      # Managed by ansible (roles/ollama). The triage containers reach Ollama at
+      # host.docker.internal:11434 (Docker host-gateway), which is NOT 127.0.0.1
+      # — so Ollama must listen on all interfaces, not just loopback.
+      [Service]
+      Environment=OLLAMA_HOST=0.0.0.0:{{ ollama_port }}
+  register: ollama_host_dropin
+  when: ollama_bind_all | bool
+
+- name: Reload systemd if the drop-in changed
+  systemd:
+    daemon_reload: true
+  when:
+    - ollama_bind_all | bool
+    - ollama_host_dropin is changed
+
+# --- Service ----------------------------------------------------------------
+- name: Ensure the ollama service is enabled and started
+  systemd:
+    name: ollama
+    state: "{{ 'restarted' if (ollama_host_dropin is defined and ollama_host_dropin is changed) else 'started' }}"
+    enabled: true
+
+- name: Wait for Ollama to be listening on its port
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ ollama_port }}"
+    timeout: 60
+
+# --- Pull models (idempotent: only pull what `ollama list` doesn't show) -----
+- name: List models already present
+  command: ollama list
+  register: ollama_list
+  changed_when: false
+
+# `ollama list` prints e.g. "qwen2.5:14b-instruct  <id>  9.0 GB  ...". Match the
+# tag at the start of a line so we only pull genuinely-missing models.
+- name: Pull missing Ollama models (async — multi-GB downloads)
+  command: "ollama pull {{ item }}"
+  loop: "{{ ollama_models }}"
+  when: item not in (ollama_list.stdout | regex_findall('(?m)^(\\S+)'))
+  async: "{{ ollama_pull_async_timeout }}"
+  poll: "{{ ollama_pull_poll_interval }}"
+  register: ollama_pull
+  changed_when: ollama_pull.rc == 0

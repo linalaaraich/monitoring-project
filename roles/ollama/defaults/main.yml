@@ -1,4 +1,34 @@
 ---
+# Defaults for the ollama role — installs Ollama as a HOST systemd unit (NOT a
+# container) and pulls the triage models. The triage containers reach it at
+# host.docker.internal:11434 (Docker's host-gateway), so Ollama must bind to
+# 0.0.0.0:11434 — see ollama_bind_all below.
+
 ollama_port: 11434
 ollama_data_dir: /var/lib/ollama
-ollama_model: "llama3.2:3b"
+
+# Official installer. get_url'd then executed; it lays down the binary + the
+# `ollama` systemd unit and the `ollama` system user.
+ollama_install_script_url: "https://ollama.com/install.sh"
+
+# Models to pull on the host GPU. 14b-instruct is the triage primary on the L4;
+# 7b-instruct is the fallback. These are multi-GB pulls — the role checks
+# `ollama list` first and only pulls what is missing.
+# NOTE: the triage_stack role requests a model via `triage_ollama_model`
+# (default "qwen2.5:14b"). Keep this list aligned with whatever tag the triage
+# stack actually calls, or it will request a model that wasn't pulled here.
+ollama_models:
+  - "qwen2.5:14b-instruct"
+  - "qwen2.5:7b-instruct"
+
+# Each `ollama pull` is multi-GB; run async with a generous ceiling.
+# 7200 s = 2 h hard ceiling per model; poll every 15 s.
+ollama_pull_async_timeout: 7200
+ollama_pull_poll_interval: 15
+
+# Bind Ollama on all interfaces (0.0.0.0:{{ ollama_port }}) via a systemd
+# drop-in. REQUIRED for the triage containers: by default Ollama binds
+# 127.0.0.1, which a container CANNOT reach via host.docker.internal (that
+# resolves to the host's bridge-gateway IP, not loopback). Leave true unless
+# you front Ollama with something else.
+ollama_bind_all: true
