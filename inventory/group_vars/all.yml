@@ -33,8 +33,12 @@ ansible_control_ip: ""
 
 # VM IPs — update from Terraform outputs for AWS deployment
 # Private IPs for inter-service traffic (stays inside VPC, no egress charges).
-monitoring_vm_ip: "10.0.1.68"
-monitoring_vm_public_ip: "52.202.21.192"  # EIP; used for URLs rendered into operator browsers
+# 2026-06-04: corrected the stale OLD-account values (private 10.0.1.68 / dead
+# EIP 52.202.21.192). New account: monitoring private IP is 10.0.1.105; operator
+# access is via Tailscale MagicDNS, so the "public" URL host is the tailnet name
+# (the old EIP is dead and would re-break the triage MCP env on apply).
+monitoring_vm_ip: "10.0.1.105"
+monitoring_vm_public_ip: "observability-rca-newacct-monitoring"  # tailnet MagicDNS; used for URLs rendered into operator browsers
 # Legacy VM IPs (docker-compose path, replaced by k3s in Sprint 2 extension)
 application_vm_ip: "<UNUSED_K3S_PATH>"
 network_vm_ip: "<UNUSED_K3S_PATH>"
