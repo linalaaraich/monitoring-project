@@ -53,8 +53,13 @@
       tags: [otel]
 
     - name: Apply OTel Collector DaemonSet (with IP substitution)
+      # 2026-06-04: the daemonset's MONITORING_VM_IP env was a baked-in literal
+      # (10.0.1.105) and this sed looked for a placeholder that wasn't present, so
+      # the literal shipped as-is. Now the manifest uses ${MONITORING_VM_IP} and
+      # this sed substitutes it (matching the configmap step above). For newacct
+      # monitoring_vm_ip=10.0.1.105, so the applied value is unchanged.
       shell: |
-        sed 's/REPLACE_WITH_MONITORING_VM_IP/{{ monitoring_vm_ip }}/g' \
+        sed 's/${MONITORING_VM_IP}/{{ monitoring_vm_ip }}/g' \
           {{ manifests_dir }}/otel-collector/daemonset.yaml | kubectl apply -f -
       tags: [otel]
 

@@ -1,4 +1,10 @@
 ---
+# NOTE (2026-06-04): ENVIRONMENT-SPECIFIC, NEW-ACCOUNT-ONLY emergency artifact.
+# Not part of the generic BYO deploy path and not applied by any playbook (it is
+# applied/reverted manually — see the revert steps below). The hardcoded IP below
+# is OUR monitoring VM and is intentionally left literal; a BYO operator does not
+# use this file (the canonical OTel DaemonSet covers the in-cluster collector).
+#
 # 2026-06-03 Lina: emergency bridge applied to the new-account k3s cluster
 # to fix audit finding #3 (Loki had zero streams). The canonical
 # manifests/otel-collector/{namespace,service,daemonset}.yaml expect an
