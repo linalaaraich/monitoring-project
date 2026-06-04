@@ -1,0 +1,67 @@
+---
+# Deploy the OpenTelemetry Demo (Astronomy Shop) microservice bed onto k3s.
+# Sprint 5 EPIC13 / S5-MSB-01.
+#
+# Runs helm from the control machine (same pattern as k8s-manifests.yml runs
+# kubectl from localhost — the control node has kubectl + helm + a kubeconfig
+# pointing at the k3s cluster). Idempotent: `helm repo add` and
+# `helm upgrade --install` are both safe to re-run.
+#
+# The demo ships NO observability backends — every component is pointed at the
+# existing in-cluster collector (otel-collector.observability) which forwards
+# traces -> monitoring-VM Jaeger and logs -> monitoring-VM Loki. See the header
+# of manifests/otel-demo/values.yaml for the full integration rationale.
+#
+# Usage:
+#   ansible-playbook playbooks/otel-demo.yml
+#   ansible-playbook playbooks/otel-demo.yml -e otel_demo_state=absent   # tear down
+#
+- name: Deploy OpenTelemetry Demo microservice bed
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    otel_demo_release: otel-demo
+    otel_demo_namespace: otel-demo
+    otel_demo_chart: open-telemetry/opentelemetry-demo
+    otel_demo_chart_version: "0.40.9"     # app 2.2.0
+    otel_demo_values: "{{ playbook_dir }}/../manifests/otel-demo/values.yaml"
+    otel_demo_state: present              # present | absent
+
+  tasks:
+    - name: Add the OpenTelemetry helm repo
+      command: >-
+        helm repo add open-telemetry
+        https://open-telemetry.github.io/opentelemetry-helm-charts
+      register: _repo_add
+      changed_when: "'has been added' in _repo_add.stdout"
+      failed_when:
+        - _repo_add.rc != 0
+        - "'already exists' not in _repo_add.stderr"
+      when: otel_demo_state == 'present'
+
+    - name: Update the OpenTelemetry helm repo
+      command: helm repo update open-telemetry
+      changed_when: false
+      when: otel_demo_state == 'present'
+
+    - name: Install / upgrade the OpenTelemetry Demo (backends disabled; routed to platform collector)
+      command: >-
+        helm upgrade --install {{ otel_demo_release }} {{ otel_demo_chart }}
+        --version {{ otel_demo_chart_version }}
+        --namespace {{ otel_demo_namespace }} --create-namespace
+        -f {{ otel_demo_values }}
+        --wait --timeout 5m
+      register: _helm_apply
+      changed_when: "'has been upgraded' in _helm_apply.stdout or 'has been installed' in _helm_apply.stdout"
+      when: otel_demo_state == 'present'
+
+    - name: Tear down the OpenTelemetry Demo
+      command: >-
+        helm uninstall {{ otel_demo_release }} --namespace {{ otel_demo_namespace }}
+      register: _helm_remove
+      changed_when: "'uninstalled' in _helm_remove.stdout"
+      failed_when:
+        - _helm_remove.rc != 0
+        - "'not found' not in _helm_remove.stderr"
+      when: otel_demo_state == 'absent'

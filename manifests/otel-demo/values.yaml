@@ -1,0 +1,53 @@
+# =============================================================================
+# OpenTelemetry Demo (Astronomy Shop) — CIRES integration values
+# Sprint 5 EPIC13 / S5-MSB-01 — the microservice demo bed.
+#
+# Chart: open-telemetry/opentelemetry-demo 0.40.9 (app 2.2.0)
+# Deployed into the `otel-demo` namespace on the k3s cluster
+# (observability-rca-newacct-k3s). Install/upgrade:
+#   helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
+#     --version 0.40.9 -n otel-demo --create-namespace \
+#     -f manifests/otel-demo/values.yaml
+#
+# INTEGRATION DECISION: the demo does NOT ship its own observability stack.
+# All telemetry is routed into the EXISTING platform pipeline by pointing every
+# component at the in-cluster collector already running in the `observability`
+# namespace (otel-collector.observability.svc.cluster.local), which forwards
+# traces -> monitoring-VM:4317 (Jaeger) and logs -> monitoring-VM:3100 (Loki).
+# That is why every bundled backend below is disabled — we reuse one pipeline,
+# avoid duplicate Jaeger/Prometheus/Grafana/OpenSearch, and keep the demo's
+# logs flowing to Loki where Drain3 ingests them (the bed for S5-DRN-01's
+# 3-tier component->app->system thresholds).
+#
+# NOTE (metrics gap, follow-up): the existing in-cluster collector has a
+# traces + logs pipeline but no metrics->Prometheus forwarding path, so demo
+# OTLP *metrics* are currently dropped. Traces + logs (what Drain3 + the 3-tier
+# work need) flow fully. Adding a metrics pipeline is tracked as a follow-up.
+# =============================================================================
+
+# default.env is a LIST — helm REPLACES it wholesale, so we restate the chart's
+# defaults and only change OTEL_COLLECTOR_NAME to the cross-namespace FQDN of
+# the platform's existing collector.
+default:
+  env:
+    - name: OTEL_SERVICE_NAME
+      valueFrom:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: "metadata.labels['app.kubernetes.io/component']"
+    - name: OTEL_COLLECTOR_NAME
+      value: otel-collector.observability.svc.cluster.local
+    - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+      value: cumulative
+
+# Reuse the platform's single pipeline — disable everything bundled.
+opentelemetry-collector:
+  enabled: false
+jaeger:
+  enabled: false
+prometheus:
+  enabled: false
+grafana:
+  enabled: false
+opensearch:
+  enabled: false
