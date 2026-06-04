@@ -71,6 +71,15 @@ processors:
 {% endfor %}
           - set(attributes["service.name"], "gpu-stack") where attributes["service.name"] == nil
 
+  # G2 prerequisite: filelog emits log.file.path as a LOG-record attribute, so a
+  # resource-context match on it never fires. Regroup logs by log.file.path so it
+  # becomes a per-file RESOURCE attribute — then transform/container_name (resource
+  # context) can match it and set a per-file service.name that Loki uses as the
+  # stream label.
+  groupbyattrs/file:
+    keys:
+      - log.file.path
+
   # G5: tag the Ollama log-file stream.
   resource/ollama:
     attributes:
@@ -102,7 +111,7 @@ service:
     # Container logs -> per-service stream (G2).
     logs/containers:
       receivers: [filelog/containers]
-      processors: [resource/common, transform/container_name, batch]
+      processors: [resource/common, groupbyattrs/file, transform/container_name, batch]
       exporters: [otlphttp/loki]
     # Ollama host-unit log file -> service_name=ollama (G5).
     logs/ollama:
