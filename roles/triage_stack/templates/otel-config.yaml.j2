@@ -32,15 +32,12 @@ receivers:
         add_metadata_from_filepath: true
 
   # --- Ollama host systemd unit journal (G5) ---
-  # Ollama runs as a HOST systemd unit (installed by EC2 user-data), reached at
-  # host.docker.internal:11434 — it is NOT a container, so filelog never sees
-  # its logs. The journald receiver (contrib) tails the host journal for the
-  # ollama.service unit and ships it as a distinct service_name=ollama stream.
-  journald/ollama:
-    directory: /var/log/journal
-    units:
-      - ollama.service
-    start_at: end
+  # NOTE (2026-06-04): Ollama runs as a HOST systemd unit, so its logs live in
+  # journald. The journald receiver was REMOVED — it shells out to `journalctl`,
+  # which is NOT present in the otel-collector-contrib image (it crash-looped:
+  # "journalctl: executable file not found in $PATH"). G5 Ollama-log shipping
+  # needs a journalctl-capable collector image or a host-side journald→OTLP
+  # shipper — deferred. Container-log shipping (G2) below is unaffected.
 
 processors:
   # Common attributes for everything off this host.
@@ -97,8 +94,4 @@ service:
       receivers: [filelog/containers]
       processors: [resource/common, transform/container_name, batch]
       exporters: [otlphttp/loki]
-    # Ollama host-unit journal -> service_name=ollama (G5).
-    logs/ollama:
-      receivers: [journald/ollama]
-      processors: [resource/common, resource/ollama, batch]
-      exporters: [otlphttp/loki]
+    # (logs/ollama pipeline removed with the journald receiver — see note above.)
