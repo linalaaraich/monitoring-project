@@ -9,6 +9,17 @@ datasources:
     uid: prometheus
     jsonData:
       timeInterval: "{{ prometheus_scrape_interval }}"
+      # metric -> trace exemplars (G4). When Prometheus is started with
+      # --enable-feature=exemplar-storage and the histogram pipeline carries
+      # exemplars (Micrometer/OTel attach trace_id to *_bucket samples), a
+      # latency-panel exemplar dot deep-links to the trace in Jaeger.
+      # name "trace_id" matches the exemplar label the OTel/Micrometer
+      # instrumentation emits. Until the Prometheus exemplar-storage flag is
+      # live this is inert (no exemplars stored), so it is safe to provision now.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger
+          urlDisplayLabel: "View trace in Jaeger"
 
   - name: Loki
     type: loki
@@ -24,14 +35,15 @@ datasources:
         - matcherType: regex
           matcherRegex: 'trace_id=([0-9a-f]{32})'
           name: TraceID
-          # IMPORTANT: This URL is rendered into the USER'S BROWSER when they
-          # click a trace_id in a log line — so it must be an address the
-          # operator's browser can reach, NOT a private/in-VPC IP.
-          # Uses monitoring_vm_public_ip (group_vars/all.yml) which is set to
-          # the monitoring VM's Elastic IP on AWS deployments.
-          url: 'http://{{ monitoring_vm_public_ip | default(monitoring_vm_ip) }}:{{ jaeger_port_ui }}/trace/$${__value.raw}'
+          # log -> trace (G4-C). Link the extracted trace_id to the JAEGER
+          # DATASOURCE by UID (an INTERNAL Grafana link) instead of a hardcoded
+          # external URL. This removes the re-provision landmine: previously the
+          # URL baked in the monitoring host (monitoring_vm_public_ip / EIP), so
+          # every host migration or EIP change silently broke the deep-link.
+          # datasourceUid resolves through Grafana's own proxy, so it follows
+          # the Jaeger datasource regardless of the host's address.
+          datasourceUid: jaeger
           urlDisplayLabel: View in Jaeger
-          openInNewTab: true
 
   - name: Jaeger
     type: jaeger
@@ -46,7 +58,13 @@ datasources:
         tags:
           - key: service.name
             value: service
-      tracesToLogs:
+      # trace -> logs (G4). Uses tracesToLogsV2 (tracesToLogs v1 is deprecated
+      # in Grafana 10+). customQuery interpolates the span's service.name into
+      # the Loki stream selector and line-filters by the trace_id (trace_id is
+      # only in the LOG BODY, not a stream label, so it must be a |= line
+      # filter, not a label matcher). This replaces the broken scaffold default
+      # `{service_name=""} |= ""` placeholder that shipped to the live grafana.
+      tracesToLogsV2:
         datasourceUid: loki
         spanStartTimeShift: "-1h"
         spanEndTimeShift: "1h"

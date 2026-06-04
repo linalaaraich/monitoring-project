@@ -16,11 +16,17 @@ triage_service_port: 8090
 # (newacct.yml sets it to the new MagicDNS name), else the new-account host.
 triage_monitoring_host: "{{ monitoring_vm_public_ip | default('observability-rca-newacct-monitoring') }}"
 
-# Monitoring service ports (fall back to all.yml's port vars if defined).
-grafana_port: "{{ grafana_port | default(3000) }}"
-loki_port: "{{ loki_port | default(3100) }}"
-prometheus_port: "{{ prometheus_port | default(9090) }}"
-jaeger_port_ui: "{{ jaeger_port_ui | default(16686) }}"
+# Monitoring service ports. These default to all.yml's port vars when the run
+# includes the monitoring group_vars, else to the literal below. NOTE: a
+# self-referential `loki_port: "{{ loki_port | default(3100) }}"` recurses
+# infinitely on the gpu_triage group (which doesn't inherit monitoring's
+# group_vars) — Ansible raises "Recursive loop detected in template". So use
+# distinct fallback var names instead of self-reference (fixed 2026-06-04;
+# this is why playbooks/gpu.yml --check previously failed to even render).
+grafana_port: "{{ grafana_port_default | default(3000) }}"
+loki_port: "{{ loki_port_default | default(3100) }}"
+prometheus_port: "{{ prometheus_port_default | default(9090) }}"
+jaeger_port_ui: "{{ jaeger_port_ui_default | default(16686) }}"
 
 # Image tags. GHCR :main for both triage + MCPs (Watchtower auto-pulls newer
 # :main builds between runs; this is what the deploy requests).

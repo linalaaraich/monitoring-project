@@ -2,11 +2,34 @@ stack_dir: /opt/stack
 admin_email: laaraichlina@gmail.com
 ssh_port: 22
 
-# UFW on the VMs is redundant with AWS security groups and its hardcoded
-# 192.168.127.0/24 rules don't apply to AWS VPC (10.0.0.0/16). Leave false
-# for AWS deploys; set true only for on-prem VM deploys.
+# --- Host firewall (UFW) ---
+# Gated OFF by default: on AWS the security groups are the primary perimeter
+# and a host firewall is redundant. But when enabled (on-prem / defence-in-
+# depth), the rules must be CORRECT and PARAMETERIZED — never a hardcoded
+# on-prem subnet that locks you out of an AWS host (A-9).
+#
+# `firewall_allowed_cidrs` is the allowlist of source CIDRs permitted inbound
+# (in addition to SSH, which is always allowed from anywhere so you can never
+# lock yourself out, and the tailnet, which is how the controller actually
+# reaches these hosts). Default to the AWS VPC CIDR + the Tailscale CGNAT
+# range (100.64.0.0/10) so the controller's tailnet path is always allowed.
+# Override per-environment (e.g. add an on-prem mgmt subnet) in group_vars or
+# inventory — do NOT hardcode a site-specific range here.
 firewall_enabled: false
-ansible_control_ip: 192.168.127.20
+# AWS VPC CIDR (this account's VPC is 10.0.0.0/16). For on-prem, override.
+vpc_cidr: "10.0.0.0/16"
+# Tailscale CGNAT range — the controller reaches every host over the tailnet,
+# so this MUST be allowed or enabling the firewall cuts off Ansible itself.
+tailnet_cidr: "100.64.0.0/10"
+firewall_allowed_cidrs:
+  - "{{ vpc_cidr }}"
+  - "{{ tailnet_cidr }}"
+# Docker bridge networks (container -> host). Kept separate so it's obvious.
+firewall_docker_cidr: "172.16.0.0/12"
+# Control node source. No longer a hardcoded on-prem IP: the controller is on
+# the tailnet, already covered by tailnet_cidr. Left empty by default; set it
+# only if you have a specific non-tailnet control IP to allow.
+ansible_control_ip: ""
 
 # VM IPs — update from Terraform outputs for AWS deployment
 # Private IPs for inter-service traffic (stays inside VPC, no egress charges).

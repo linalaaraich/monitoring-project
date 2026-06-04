@@ -13,6 +13,22 @@ scrape_configs:
       - targets: ['{{ target.host }}:{{ target.port }}']
 {% endfor %}
 
+{% if gpu_triage_scrape_enabled | default(false) %}
+  # ========== GPU triage host (observability self-monitoring, G1/G5) ==========
+  # Scrapes the AI triage pipeline + GPU-host node/GPU exporters over the
+  # tailnet (no AWS SG change needed). The triage orchestrator :8090 exposes
+  # the whole pipeline's metrics; gpu-node-exporter + gpu-dcgm-exporter are
+  # shipped by playbooks/gpu.yml and stay DOWN-but-harmless until that applies.
+{% for target in gpu_triage_targets %}
+  - job_name: '{{ target.job }}'
+{% if target.metrics_path is defined %}
+    metrics_path: '{{ target.metrics_path }}'
+{% endif %}
+    static_configs:
+      - targets: ['{{ target.host }}:{{ target.port }}']
+{% endfor %}
+{% endif %}
+
 {% if k3s_sd_enabled | default(false) %}
   # ========== k3s node — kubelet cAdvisor (container CPU/mem for every pod) ==========
   # Exposed on /metrics/cadvisor on the kubelet port 10250 (TLS, bearer-token-auth).

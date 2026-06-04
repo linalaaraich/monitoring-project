@@ -19,26 +19,40 @@
 - name: Enable and configure UFW
   when: firewall_enabled | default(false)
   block:
-    - name: Allow SSH
+    # SSH is allowed from ANYWHERE, unconditionally and FIRST — this is the
+    # anti-lockout guarantee. Even if every CIDR below is misconfigured, you
+    # can still SSH in to fix it. (Restrict SSH source at the SG/tailnet ACL
+    # layer, not here, so a host-firewall mistake can never strand the box.)
+    - name: Allow SSH (anti-lockout — always, from anywhere)
       ufw:
         rule: allow
         port: "{{ ssh_port }}"
         proto: tcp
+        comment: SSH anti-lockout
 
-    - name: Allow traffic from Ansible control node
+    # Parameterized allowlist — the VPC CIDR + the tailnet by default, NO
+    # hardcoded on-prem subnet. The tailnet entry is what keeps Ansible itself
+    # reachable after enabling (the controller connects over the tailnet).
+    - name: Allow traffic from configured management CIDRs
+      ufw:
+        rule: allow
+        from_ip: "{{ item }}"
+        comment: "firewall_allowed_cidrs"
+      loop: "{{ firewall_allowed_cidrs | default([]) }}"
+
+    # Optional explicit control-node IP (empty by default — the controller is
+    # normally covered by the tailnet CIDR above).
+    - name: Allow traffic from Ansible control node (if set)
       ufw:
         rule: allow
         from_ip: "{{ ansible_control_ip }}"
-
-    - name: Allow traffic within monitoring subnet
-      ufw:
-        rule: allow
-        from_ip: 192.168.127.0/24
+        comment: "ansible_control_ip"
+      when: ansible_control_ip | default('') | length > 0
 
     - name: Allow traffic from Docker bridge networks
       ufw:
         rule: allow
-        from_ip: 172.16.0.0/12
+        from_ip: "{{ firewall_docker_cidr | default('172.16.0.0/12') }}"
         comment: Docker bridge networks (container-to-host)
 
     - name: Enable UFW (default deny incoming)

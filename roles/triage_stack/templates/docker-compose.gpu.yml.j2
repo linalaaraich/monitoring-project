@@ -223,6 +223,14 @@ services:
     volumes:
       - ./otel-config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # G2: the `container` operator enriches each log line with the real
+      # container.name (not just the id hash) by querying the Docker API.
+      # Read-only socket mount; the collector already runs as root (user 0:0).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # G5: tail the host journal so Ollama's systemd-unit logs (a HOST unit,
+      # not a container — filelog never sees it) ship to Loki. Read-only.
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     restart: unless-stopped
     # No healthcheck - the contrib image is distroless (no shell). The
@@ -250,3 +258,53 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # G5: node-exporter for the GPU HOST (CPU / mem / disk / net). Until now the
+  # GPU box — the platform's most important host — had no host metrics at all.
+  # Publishes on host :9100; the central Prometheus scrapes it over the tailnet
+  # (job `gpu-node-exporter`). Host namespaces mounted read-only so it reports
+  # the HOST's resources, not the container's.
+  # ---------------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: ai-node-exporter
+    hostname: gpu-node-exporter
+    pid: host
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--web.listen-address=:{{ node_port | default(9100) }}'
+
+  # ---------------------------------------------------------------------------
+  # G5: NVIDIA DCGM-exporter for the A10G (GPU util, VRAM used/free, temp,
+  # power, SM clocks). Publishes on host :9400; scraped over the tailnet (job
+  # `gpu-dcgm-exporter`). Needs the GPU exposed via the nvidia container
+  # runtime (nvidia-container-toolkit is installed on the host).
+  # DCGM_FI_DEV_GPU_UTIL / DCGM_FI_DEV_FB_USED drive the GPU-saturation alerts.
+  # ---------------------------------------------------------------------------
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.9-3.6.1-ubuntu22.04
+    container_name: ai-dcgm-exporter
+    hostname: gpu-dcgm-exporter
+    network_mode: host
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+    environment:
+      DCGM_EXPORTER_LISTEN: ":9400"

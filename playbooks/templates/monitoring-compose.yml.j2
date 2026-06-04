@@ -16,6 +16,13 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time={{ prometheus_retention_days }}d'
       - '--web.enable-lifecycle'
+      # G4: enable exemplar storage so histogram *_bucket samples can carry a
+      # trace_id exemplar (Micrometer/OTel attach it), wiring metric->trace.
+      # Grafana's Prometheus DS exemplarTraceIdDestinations (provisioned) then
+      # renders the exemplar dots as deep-links into Jaeger. Requires a
+      # Prometheus restart to take effect — applied by the next stack deploy.
+      - '--enable-feature=exemplar-storage'
+      - '--storage.exemplars.max-exemplars={{ prometheus_max_exemplars | default(100000) }}'
     healthcheck:
       test: ["CMD", "promtool", "check", "healthy"]
       interval: 15s

@@ -1,45 +1,50 @@
 # =============================================================================
-# OTel Collector config for the dedicated GPU EC2 box (Phase 2, 2026-06-03).
+# OTel Collector config for the dedicated GPU EC2 box (Phase 2, 2026-06-03;
+# G2/G5 unified-view fixes 2026-06-04).
 # MANAGED BY ANSIBLE (roles/triage_stack) — templated to
 # {{ triage_stack_dir }}/otel-config.yaml. DO NOT EDIT BY HAND.
 #
-# Ships triage-service + 5 MCP container stdout/stderr to the central Loki on
-# the monitoring VM via Loki's native OTLP ingest (/otlp). Network: bridge;
-# Tailscale MagicDNS resolves via the host resolver inherited from
-# /etc/resolv.conf, same as the MCP containers.
+# Ships, to the central monitoring VM:
+#   - per-container stdout/stderr for the triage + 6 ai-* containers, each
+#     labelled with its REAL container name (G2 — was all `gpu-stack`)
+#   - the Ollama HOST systemd unit's journal (G5 — was never shipped; Ollama
+#     is a host unit, not a container, so filelog never saw it)
+# all to the central Loki via Loki's native OTLP ingest (/otlp).
+#
+# Network: bridge; Tailscale MagicDNS resolves via the host resolver inherited
+# from /etc/resolv.conf, same as the MCP containers.
 # =============================================================================
 
 receivers:
+  # --- Container stdout/stderr, enriched with the REAL container name (G2) ---
+  # The `container` operator (contrib) natively parses Docker json-log format
+  # AND, with add_metadata_from_filepath + the mounted docker.sock, resolves
+  # the container id in the file path to its container.name / image. That gives
+  # us a per-service stream instead of one undifferentiated `gpu-stack`.
   filelog/containers:
     include:
       - /var/lib/docker/containers/*/*-json.log
     start_at: end
     include_file_path: true
     operators:
-      - type: json_parser
-        parse_from: body
-        parse_to: attributes
-      - type: move
-        from: attributes.log
-        to: body
-      - type: move
-        from: attributes.stream
-        to: attributes["log.iostream"]
-      - type: move
-        from: attributes.time
-        to: attributes["log.time"]
-      # Pull the container id out of the file path so it can become a Loki
-      # label - /var/lib/docker/containers/<id>/<id>-json.log.
-      - type: regex_parser
-        parse_from: attributes["log.file.path"]
-        regex: '^/var/lib/docker/containers/(?P<container_id>[a-f0-9]+)/'
-        parse_to: resource
-      # Drop this collector's own output to avoid a feedback loop.
-      - type: filter
-        expr: 'body matches "otelcol\\.component" or body matches "fileconsumer"'
+      - type: container
+        format: docker
+        add_metadata_from_filepath: true
+
+  # --- Ollama host systemd unit journal (G5) ---
+  # Ollama runs as a HOST systemd unit (installed by EC2 user-data), reached at
+  # host.docker.internal:11434 — it is NOT a container, so filelog never sees
+  # its logs. The journald receiver (contrib) tails the host journal for the
+  # ollama.service unit and ships it as a distinct service_name=ollama stream.
+  journald/ollama:
+    directory: /var/log/journal
+    units:
+      - ollama.service
+    start_at: end
 
 processors:
-  resource:
+  # Common attributes for everything off this host.
+  resource/common:
     attributes:
       - action: insert
         key: host.name
@@ -47,9 +52,25 @@ processors:
       - action: insert
         key: deployment.environment
         value: cires
-      - action: insert
+
+  # G2: promote the container.name the `container` operator resolved into the
+  # service.name resource attribute, so each ai-* container becomes its own
+  # Loki stream (service_name=ai-triage-service / ai-mcp-prometheus / ...).
+  # Falls back to gpu-stack only if the name could not be resolved.
+  transform/container_name:
+    log_statements:
+      - context: resource
+        statements:
+          - set(attributes["service.name"], attributes["container.name"]) where attributes["container.name"] != nil
+          - set(attributes["service.name"], "gpu-stack") where attributes["service.name"] == nil
+
+  # G5: tag the Ollama journal stream.
+  resource/ollama:
+    attributes:
+      - action: upsert
         key: service.name
-        value: gpu-stack
+        value: ollama
+
   batch:
     send_batch_size: 200
     send_batch_max_size: 200
@@ -71,7 +92,13 @@ service:
     logs:
       level: warn
   pipelines:
-    logs:
+    # Container logs -> per-service stream (G2).
+    logs/containers:
       receivers: [filelog/containers]
-      processors: [resource, batch]
+      processors: [resource/common, transform/container_name, batch]
+      exporters: [otlphttp/loki]
+    # Ollama host-unit journal -> service_name=ollama (G5).
+    logs/ollama:
+      receivers: [journald/ollama]
+      processors: [resource/common, resource/ollama, batch]
       exporters: [otlphttp/loki]

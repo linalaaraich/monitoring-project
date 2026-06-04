@@ -90,6 +90,32 @@ data:
             value: "cires-observability"
             action: upsert
 
+      # G6 (FLAG, do not churn): the employees-backend app has a DUAL service
+      # identity — it appears as BOTH `employees-backend` and `spring-boot`
+      # across Jaeger services, Loki service_name, and Prometheus labels. Root
+      # cause is an inconsistent OTEL_SERVICE_NAME / service.name between the
+      # OTel java-agent env and the k8s labels. The fix (standardize on one
+      # canonical `employees-backend` in the app deploy + dashboards) touches
+      # the app deployment and several dashboard queries, so it is deliberately
+      # NOT done here to avoid breaking panels mid-cutover. Tracked for a
+      # coordinated app-deploy + dashboard pass. Do not alias it away in the
+      # collector (that hides the real inconsistency).
+      #
+      # G3: give Kong proxy logs a discoverable service identity. Kong's access
+      # logs DO reach Loki via filelog, but only under the opaque container name
+      # `proxy` (k8s_container_name) — so a `{service_name="kong"}` query (the
+      # natural way an operator looks for gateway logs, matching the kong-gateway
+      # Jaeger service + tracesToLogsV2) returns nothing. This sets a
+      # service_name resource attr: `kong` for the network-ns proxy container,
+      # else the container name, so every stream is queryable by service_name
+      # and the gateway's 4xx/5xx access lines correlate to traces by service.
+      transform/service_name:
+        log_statements:
+          - context: resource
+            statements:
+              - set(attributes["service_name"], attributes["k8s_container_name"]) where attributes["service_name"] == nil
+              - set(attributes["service_name"], "kong") where attributes["k8s_namespace_name"] == "network" and attributes["k8s_container_name"] == "proxy"
+
       # Batch for efficiency
       batch:
         send_batch_size: 1024
@@ -105,7 +131,7 @@ data:
             # These keys come from the filelog regex parser (resource attrs).
             # Use the same naming here (underscore form); Loki exporter looks
             # up resource attrs by this exact key.
-            value: k8s_namespace_name, k8s_pod_name, k8s_container_name, k8s_node_name, k8s_deployment_name
+            value: k8s_namespace_name, k8s_pod_name, k8s_container_name, k8s_node_name, k8s_deployment_name, service_name
 
     exporters:
       # Forward traces to monitoring VM OTel Collector -> Jaeger
@@ -144,5 +170,5 @@ data:
           exporters: [otlp/traces]
         logs:
           receivers: [filelog, otlp]
-          processors: [k8sattributes, resource, attributes/loki-labels, batch]
+          processors: [k8sattributes, resource, transform/service_name, attributes/loki-labels, batch]
           exporters: [loki]

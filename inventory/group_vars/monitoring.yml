@@ -76,6 +76,47 @@ prometheus_targets:
     host: "{{ k3s_host_ip }}"
     port: "{{ node_port }}"
 
+# --- GPU triage host (observability self-monitoring) ---
+# The dedicated GPU EC2 box (us-west-2) runs the AI triage pipeline: the
+# triage orchestrator (:8090) + 6 ai-* containers + host Ollama + the A10G.
+# Until 2026-06-04 NONE of it was scraped, so the `triage-service-health`
+# dashboard was 100% no-data (audit G1). The triage orchestrator already
+# exposes a rich Prometheus endpoint on :8090/metrics that AGGREGATES the
+# whole pipeline — triage_*, ollama_*, drain3_*, and triage_mcp_* (per-MCP
+# request/latency) — so a single scrape of :8090 lights the dashboard. The
+# individual MCP containers (:8091-:8095) bind only inside the GPU host's
+# docker network (not host-published), so they cannot and need not be
+# scraped directly; their telemetry surfaces via triage_mcp_* on :8090.
+#
+# Reachability: the central Prometheus reaches the GPU box over the TAILNET
+# (verified 2026-06-04 from inside the prometheus container — both MagicDNS
+# and the tailnet IP resolve+connect, HTTP 200). NO AWS SG change is needed;
+# the tailnet bypasses SGs. We target the tailnet IP rather than the MagicDNS
+# name to avoid coupling the in-container scrape to MagicDNS resolution (the
+# same reason monitoring_vm_ip uses a private IP, not a hostname).
+#
+# node-exporter / DCGM-exporter for the GPU host (host CPU/mem/disk + A10G
+# GPU/VRAM/temp metrics) are deployed by playbooks/gpu.yml (roles/triage_stack)
+# and scraped via the gpu-node / gpu-dcgm jobs below once that apply lands.
+gpu_triage_scrape_enabled: true
+gpu_host_tailnet_ip: "100.114.76.43"   # observability-gpu-uswest2-newacct
+gpu_triage_targets:
+  # Triage orchestrator — exposes the whole pipeline's metrics (the metrics
+  # the triage-service-health dashboard queries). Host-published on :8090.
+  - job: "ai-triage-service"
+    host: "{{ gpu_host_tailnet_ip }}"
+    port: "{{ triage_service_port | default(8090) }}"
+  # GPU host node-exporter (host CPU/mem/disk). Deployed by gpu.yml; the job
+  # is harmless (DOWN) until the exporter container is up after that apply.
+  - job: "gpu-node-exporter"
+    host: "{{ gpu_host_tailnet_ip }}"
+    port: "{{ node_port }}"
+  # NVIDIA DCGM-exporter (A10G utilization, VRAM, temp, power). Deployed by
+  # gpu.yml; harmless (DOWN) until the exporter container is up.
+  - job: "gpu-dcgm-exporter"
+    host: "{{ gpu_host_tailnet_ip }}"
+    port: "9400"
+
 loki_retention_days: 7
 
 # --- Kubernetes service discovery ---

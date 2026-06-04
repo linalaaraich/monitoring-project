@@ -1,0 +1,33 @@
+# Surgical apply of the Grafana datasource provisioning WITHOUT the grafana
+# role's "restart stack" handler (which restarts the whole monitoring compose).
+# Renders datasources.yml.j2 with the same inventory vars as the role, then
+# hot-reloads Grafana's datasource provisioning via the admin API.
+# Throwaway: `ansible-playbook -i inventory/newacct.yml _apply_datasources.yml`
+#
+# Closes G4 drift: the live Grafana Jaeger datasource still carried the broken
+# scaffold `tracesToLogs.query = {service_name=""} |= ""` placeholder and the
+# Prometheus datasource had no exemplar config — the repo template was already
+# fixed but never re-provisioned. This applies it with no container restart.
+- hosts: monitoring
+  gather_facts: false
+  become: true
+  vars:
+    grafana_provisioning_dir: /etc/grafana/provisioning
+  tasks:
+    - name: Render Grafana datasource provisioning (no stack restart)
+      template:
+        src: "{{ playbook_dir }}/roles/grafana/templates/datasources.yml.j2"
+        dest: "{{ grafana_provisioning_dir }}/datasources/datasources.yml"
+        owner: "472"
+        group: "472"
+        mode: "0644"
+
+    - name: Hot-reload Grafana datasource provisioning (no restart)
+      become: false
+      uri:
+        url: "http://localhost:{{ grafana_port | default(3000) }}/api/admin/provisioning/datasources/reload"
+        method: POST
+        user: admin
+        password: admin
+        force_basic_auth: true
+        status_code: [200, 202]
