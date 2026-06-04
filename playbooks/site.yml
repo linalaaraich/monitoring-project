@@ -34,8 +34,10 @@
 # `-e triage_stack_apply=true` when you intend to (re)deploy. See playbooks/gpu.yml.
 # - import_playbook: gpu.yml
 
-# Legacy VM-based deployment (replaced by k3s in Sprint 2 extension)
-# - import_playbook: application.yml
-# - import_playbook: network.yml
-# - import_playbook: ai.yml
+# Legacy VM-based deployment (replaced by k3s in Sprint 2 extension).
+# These playbooks were retired to ../legacy/ (2026-06-04) — DO NOT RUN. See
+# legacy/README.md. Left here only to document the old flow:
+# - import_playbook: ../legacy/application.yml
+# - import_playbook: ../legacy/network.yml
+# - import_playbook: ../legacy/ai.yml
 # - import_playbook: integration.yml

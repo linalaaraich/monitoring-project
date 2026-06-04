@@ -1,4 +1,26 @@
 ---
+# =============================================================================
+# Ansible Galaxy requirements.  Install with:
+#     ansible-galaxy install -r requirements.yml
+#
+# CONTROL-MACHINE PREREQUISITES (binaries that must be on PATH, NOT installed by
+# this file — install them with your OS package manager / vendor instructions):
+#   - ansible            (the controller itself)
+#   - kubectl            k8s ops in playbooks/k8s-manifests.yml are raw kubectl
+#                        `command:`/`shell:` calls, NOT the kubernetes.core
+#                        module — so the kubectl BINARY is required (and a
+#                        kubeconfig pointed at your cluster). For the same reason
+#                        the kubernetes.core collection is intentionally NOT
+#                        listed below: nothing in this repo uses it.
+#   - helm               Helm charts (spring-boot, kong, ai-stack) are installed
+#                        via `helm` per playbooks/site.yml's header notes.
+#   - rsync              used by file-sync tasks + listed in common_packages; the
+#                        binary must exist on the controller for any rsync push.
+#   - ssh client + the private key referenced by ansible_ssh_private_key_file.
+#
+# Python: ansible's community.docker module needs the `docker` Python SDK on the
+# TARGET hosts (the docker role installs it); no extra control-machine pip here.
+# =============================================================================
 roles:
   - name: xanmanning.k3s
     version: "v3.4.4"
