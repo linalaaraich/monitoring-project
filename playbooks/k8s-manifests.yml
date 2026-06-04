@@ -118,7 +118,12 @@
         dest: "{{ item.dest }}"
         owner: root
         group: root
-        mode: "0600"
+        # 0644 (not 0600): Prometheus runs as a NON-root user inside its
+        # container and bind-mounts this dir read-only; 0600/root made the
+        # bearer token unreadable -> kubelet/pod scrapes failed with
+        # "unable to read authorization credentials". Dir is host-root and
+        # all traffic is inside the Tailscale tunnel. (2026-06-04)
+        mode: "0644"
       loop:
         - { src: /tmp/k3s-prometheus-token, dest: /etc/prometheus/k3s-token }
         - { src: /tmp/k3s-prometheus-ca.crt, dest: /etc/prometheus/k3s-ca.crt }

@@ -26,6 +26,7 @@ rules:
       - nodes/proxy
       - nodes/metrics
       - pods
+      - pods/proxy
       - services
       - endpoints
     verbs: ["get", "list", "watch"]
