@@ -33,8 +33,10 @@ jaeger_port_ui: "{{ jaeger_port_ui_default | default(16686) }}"
 triage_image_tag: "main"
 mcp_image_tag: "main"
 
-# Ollama model on the host GPU. 14b primary on the A10G; 7b is the fallback.
-triage_ollama_model: "qwen2.5:14b"
+# Ollama model the triage service requests. Wired to the single `llm_model`
+# inventory knob so it can never drift from what the ollama role actually pulls
+# (see roles/ollama ollama_models). Default 14b primary; 7b is the fallback.
+triage_ollama_model: "{{ llm_model | default('qwen2.5:14b') }}"
 
 # OTel resource host.name label for this host's container logs.
 triage_otel_host_name: "gpu-uswest2-newacct"

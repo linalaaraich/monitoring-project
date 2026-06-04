@@ -11,15 +11,15 @@ ollama_data_dir: /var/lib/ollama
 # `ollama` systemd unit and the `ollama` system user.
 ollama_install_script_url: "https://ollama.com/install.sh"
 
-# Models to pull on the host GPU. 14b-instruct is the triage primary on the L4;
-# 7b-instruct is the fallback. These are multi-GB pulls — the role checks
-# `ollama list` first and only pulls what is missing.
-# NOTE: the triage_stack role requests a model via `triage_ollama_model`
-# (default "qwen2.5:14b"). Keep this list aligned with whatever tag the triage
-# stack actually calls, or it will request a model that wasn't pulled here.
+# Models to pull on the host GPU. Driven by the single `llm_model` knob (set in
+# the inventory; default "qwen2.5:14b" — the primary on the L4) plus a small
+# fallback, so the pull list can NEVER drift from the tag the triage stack
+# actually calls (triage_ollama_model is wired to the same llm_model below).
+# These are multi-GB pulls — the role checks `ollama list` first and only pulls
+# what is missing. Note: in Ollama, `qwen2.5:14b` IS the instruct build.
 ollama_models:
-  - "qwen2.5:14b-instruct"
-  - "qwen2.5:7b-instruct"
+  - "{{ llm_model | default('qwen2.5:14b') }}"
+  - "{{ llm_fallback_model | default('qwen2.5:7b') }}"
 
 # Each `ollama pull` is multi-GB; run async with a generous ceiling.
 # 7200 s = 2 h hard ceiling per model; poll every 15 s.
