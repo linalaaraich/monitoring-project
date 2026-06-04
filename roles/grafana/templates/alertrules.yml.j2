@@ -64,7 +64,7 @@ groups:
         for: 2m
         labels:
           severity: warning
-          service: spring-boot
+          service: employees-backend
           signal: metric
           component: api
           timeframe: 10m
@@ -72,7 +72,7 @@ groups:
         annotations:
           expr: 'histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{{ "{" }}{{ spring_selector }}{{ "}" }}[5m])) by (le)) * 1000'
           summary: "P95 request latency above 1000ms"
-          description: "Spring Boot p95 latency has exceeded 1000ms for 2m. Static threshold (temporary, until 7d baseline accumulates on the new account)."
+          description: "employees-backend p95 latency has exceeded 1000ms for 2m. Static threshold (temporary, until 7d baseline accumulates on the new account)."
           # P2 fix (2026-05-19) — recurrence-gate opt-in.
           # Warning-severity (severity: warning above) and historically
           # prone to dismiss-cascades during traffic-driven spikes. The
@@ -738,14 +738,14 @@ groups:
         for: 2m
         labels:
           severity: warning
-          service: spring-boot
+          service: employees-backend
           signal: metric
           component: pod
           timeframe: 10m
         annotations:
           expr: '(container_memory_working_set_bytes{namespace=~"app|rental",container=~"spring-boot|backend"} / container_spec_memory_limit_bytes{namespace=~"app|rental",container=~"spring-boot|backend"}) * 100'
-          summary: "Spring Boot pod memory above 85% of cgroup limit"
-          description: "spring-boot pod working-set memory has been above 85% of its cgroup limit for 2m. Risk of imminent OOMKill. Check JVM heap (Micrometer jvm_memory_used_bytes) and pod resource requests/limits."
+          summary: "employees-backend pod memory above 85% of cgroup limit"
+          description: "employees-backend pod working-set memory has been above 85% of its cgroup limit for 2m. Risk of imminent OOMKill. Check JVM heap (Micrometer jvm_memory_used_bytes) and pod resource requests/limits. (Container name remains `spring-boot` because the image's entry point expects it; the operator-facing app token is `employees-backend`.)"
 
       # Pod-level CPU pressure. Same rationale as PodHighMemoryUsage:
       # the host-level HighCpuUsage rule averages across the whole node,
@@ -791,14 +791,14 @@ groups:
         for: 2m
         labels:
           severity: warning
-          service: spring-boot
+          service: employees-backend
           signal: metric
           component: pod
           timeframe: 10m
         annotations:
           expr: '(rate(container_cpu_usage_seconds_total{namespace=~"app|rental",container=~"spring-boot|backend"}[5m]) / (container_spec_cpu_quota{namespace=~"app|rental",container=~"spring-boot|backend"} / container_spec_cpu_period{namespace=~"app|rental",container=~"spring-boot|backend"})) * 100'
-          summary: "Spring Boot pod CPU above 80% of cgroup quota"
-          description: "spring-boot pod CPU usage has been above 80% of its cgroup CPU quota for 2m. Likely throttling on the cgroup. Investigate hot endpoints (HTTP request rate per URI), JVM threads, GC pressure."
+          summary: "employees-backend pod CPU above 80% of cgroup quota"
+          description: "employees-backend pod CPU usage has been above 80% of its cgroup CPU quota for 2m. Likely throttling on the cgroup. Investigate hot endpoints (HTTP request rate per URI), JVM threads, GC pressure. (Container name remains `spring-boot`; operator-facing app token is `employees-backend`.)"
 
   - orgId: 1
     name: log_alerts

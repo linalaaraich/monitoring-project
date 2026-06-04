@@ -1,5 +1,16 @@
-nameOverride: ""
-fullnameOverride: ""
+# WS-1 (2026-06-04): Operator-facing app name. The chart directory,
+# `.Chart.Name`, and the rendered Deployment/Service name all stay
+# `spring-boot` (chaos scripts + demo scripts reference deploy/spring-boot
+# by name; the image's container name is also `spring-boot`). The
+# `app.kubernetes.io/name` label is overridden to the domain-meaningful
+# `employees-backend` (the image is the mukundmadhav employee-CRUD demo;
+# /api/employee). Prom's existing `labelmap` rule on
+# `__meta_kubernetes_pod_label_(.+)` promotes this to the
+# `app_kubernetes_io_name="employees-backend"` metric label, which Grafana
+# dashboards and alert rules can select on alongside the existing
+# `container="spring-boot"` selector.
+nameOverride: "employees-backend"
+fullnameOverride: "spring-boot"
 
 replicaCount: 1
 
@@ -34,14 +45,16 @@ database:
   password: ""
 
 # OTel Java Agent.
-# Use the same name across all three pillars (Loki service_name, Prometheus
-# app label, Jaeger service) so alerts with a single "service" value can be
-# looked up in every system. Previously this was "react-springboot-app"
-# which didn't match the alert labels — broke MCP context fan-out.
+# WS-1 (2026-06-04): service.name is now the operator-facing app token
+# (`employees-backend`) so Loki streams, Jaeger traces, and the triage
+# `alert.service` label all key on the same string. The legacy
+# `spring-boot` token is still recognised by the triage SERVICE_TYPE +
+# service_deployment_type maps for backwards-compatible RCA history
+# lookups.
 otel:
   enabled: true
   agentVersion: "2.11.0"
-  serviceName: "spring-boot"
+  serviceName: "employees-backend"
   exporterEndpoint: "http://otel-collector.observability.svc.cluster.local:4317"
 
 # Spring Boot's default log level is INFO which emits very few lines under

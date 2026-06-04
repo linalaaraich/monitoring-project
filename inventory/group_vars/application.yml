@@ -2,6 +2,18 @@ app_config_dir: /opt/app
 otel_dir: /opt/otel
 app_log_dir: /var/log/app
 
+# WS-1 (2026-06-04): Operator-facing app name. The image is the generic
+# mukundmadhav/react-springboot-mysql demo (employee CRUD; /api/employee).
+# Per Lina's naming rule ("bill app => bill-backend, bill-db, ..."), we
+# expose this workload to operators / Grafana / triage / docs as the
+# `employees` app. The k8s container name + helm chart name stay
+# `spring-boot` (image-coupled); the rename lives in labels + the
+# OTel service.name only — see charts/spring-boot/values.yaml.
+app_name: employees
+app_backend_name: "{{ app_name }}-backend"
+app_db_name: "{{ app_name }}-db"
+app_gateway_name: "{{ app_name }}-gateway"
+
 app_frontend_port: 80
 app_backend_port: 8080
 app_db_port: 3306
@@ -18,7 +30,12 @@ spring_datasource_url: "jdbc:mysql://{{ rds_endpoint }}:{{ rds_port }}/{{ mysql_
 
 otel_agent_version: "2.25.0"
 otel_agent_jar: "/opt/otel/opentelemetry-javaagent.jar"
-otel_service_name: "react-springboot-app"
+# OTel service.name now matches the operator-facing app token so Grafana,
+# Loki, Jaeger, and the triage exemplars all key on the same string.
+# Legacy aliases (`spring-boot`, `react-springboot-app`) stay live in
+# v2_mappings + service_deployment_type for backwards-compat resolution
+# of historical records.
+otel_service_name: "{{ app_backend_name }}"
 otel_exporter_endpoint: "http://otel-collector:4317"
 
 app_log_path: "/var/log/app/*.log"

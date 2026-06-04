@@ -477,11 +477,11 @@
       "pluginVersion": "12.4.1",
       "targets": [
         {
-          "expr": "max(up{app_kubernetes_io_name=\"spring-boot\"}) or vector(0)",
+          "expr": "max(up{app_kubernetes_io_name=\"employees-backend\"}) or vector(0)",
           "refId": "A"
         }
       ],
-      "title": "Spring Boot",
+      "title": "Employees backend",
       "type": "stat"
     },
     {
@@ -1967,12 +1967,12 @@
           },
           "queryType": "search",
           "refId": "A",
-          "service": "spring-boot",
+          "service": "employees-backend",
           "limit": 20
         }
       ],
       "title": "Recent Traces",
-      "description": "Recent Spring Boot traces. Click a Trace ID to view it in Jaeger.",
+      "description": "Recent employees-backend traces (OTel service.name). Click a Trace ID to view it in Jaeger.",
       "type": "table"
     },
     {
