@@ -15,7 +15,10 @@ fullnameOverride: "spring-boot"
 replicaCount: 1
 
 image:
-  repository: mukundmadhav/react-springboot-mysql
+  # cires/spring-boot is the first-party image ported into the new-account k3s
+  # containerd (the upstream mukundmadhav/react-springboot-mysql:latest tag is
+  # dead on Docker Hub). Pinned here so a fresh `helm install` is reproducible.
+  repository: cires/spring-boot
   tag: "latest"
   pullPolicy: IfNotPresent
 
