@@ -22,6 +22,28 @@
     state: directory
     mode: '0755'
 
+# Render Dockerfile-only build contexts (shape 2 — e.g. cires/spring-boot).
+# These have no source tree to rsync: the Dockerfile self-clones its source at
+# build time, so we just need the rendered Dockerfile in an otherwise-empty
+# context dir on the remote host.
+- name: Create remote context dir for Dockerfile-template images
+  file:
+    path: "{{ remote_build_dir }}/{{ item.remote_subdir }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ first_party_images | selectattr('dockerfile_template', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Render Dockerfile for Dockerfile-template images
+  template:
+    src: "{{ item.dockerfile_template }}"
+    dest: "{{ remote_build_dir }}/{{ item.remote_subdir }}/Dockerfile"
+    mode: '0644'
+  loop: "{{ first_party_images | selectattr('dockerfile_template', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 # Sync triage service source to k3s host
 - name: Sync triage service repo to k3s host
   synchronize:
@@ -50,7 +72,7 @@
   command: >
     docker build
     -t {{ item.name }}:{{ image_tag }}
-    -f {{ remote_build_dir }}/{{ item.remote_subdir }}/{{ item.dockerfile_rel }}
+    -f {{ remote_build_dir }}/{{ item.remote_subdir }}/{{ item.dockerfile_rel | default('Dockerfile') }}
     {{ remote_build_dir }}/{{ item.remote_subdir }}
   loop: "{{ first_party_images }}"
   loop_control:

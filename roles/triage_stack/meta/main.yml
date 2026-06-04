@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: triage_stack
+  description: >-
+    Codifies the live hand-managed GPU triage stack (/opt/triage):
+    docker-compose.gpu.yml + .env + otel-config.yaml + drain3.ini for the
+    triage orchestrator, 5 MCP bridges, and the host-log OTel Collector.
+    Ollama runs as a host systemd unit (not managed here). APPLY WITH CARE —
+    compose lifecycle is gated behind triage_stack_apply (default false).
+  min_ansible_version: "2.12"
+dependencies: []

@@ -15,7 +15,15 @@
   connection: local
   gather_facts: false
   vars:
-    monitoring_vm_ip: "{{ hostvars['monitoring-vm']['ansible_host'] | default(lookup('env', 'MONITORING_VM_IP') | default('MONITORING_VM_IP_NOT_SET', true)) }}"
+    # A-12 (2026-06-04): prefer the `monitoring_vm_ip` host_var over
+    # `ansible_host`. Under newacct.yml, `ansible_host` is a MagicDNS NAME
+    # (observability-rca-newacct-monitoring) which does NOT resolve inside k3s
+    # pods (containers don't inherit Tailscale's resolver) — re-running --tags
+    # otel would have baked an unresolvable name into the OTel CM/DaemonSet and
+    # silently dropped logs/traces. The host_var is the routable private IP
+    # (10.0.1.105). Fall back to ansible_host, then the env var, then a loud
+    # sentinel.
+    monitoring_vm_ip: "{{ hostvars['monitoring-vm']['monitoring_vm_ip'] | default(hostvars['monitoring-vm']['ansible_host'] | default(lookup('env', 'MONITORING_VM_IP') | default('MONITORING_VM_IP_NOT_SET', true))) }}"
     manifests_dir: "{{ playbook_dir }}/../manifests"
 
   tasks:

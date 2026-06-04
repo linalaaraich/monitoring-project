@@ -1,0 +1,77 @@
+# =============================================================================
+# OTel Collector config for the dedicated GPU EC2 box (Phase 2, 2026-06-03).
+# MANAGED BY ANSIBLE (roles/triage_stack) — templated to
+# {{ triage_stack_dir }}/otel-config.yaml. DO NOT EDIT BY HAND.
+#
+# Ships triage-service + 5 MCP container stdout/stderr to the central Loki on
+# the monitoring VM via Loki's native OTLP ingest (/otlp). Network: bridge;
+# Tailscale MagicDNS resolves via the host resolver inherited from
+# /etc/resolv.conf, same as the MCP containers.
+# =============================================================================
+
+receivers:
+  filelog/containers:
+    include:
+      - /var/lib/docker/containers/*/*-json.log
+    start_at: end
+    include_file_path: true
+    operators:
+      - type: json_parser
+        parse_from: body
+        parse_to: attributes
+      - type: move
+        from: attributes.log
+        to: body
+      - type: move
+        from: attributes.stream
+        to: attributes["log.iostream"]
+      - type: move
+        from: attributes.time
+        to: attributes["log.time"]
+      # Pull the container id out of the file path so it can become a Loki
+      # label - /var/lib/docker/containers/<id>/<id>-json.log.
+      - type: regex_parser
+        parse_from: attributes["log.file.path"]
+        regex: '^/var/lib/docker/containers/(?P<container_id>[a-f0-9]+)/'
+        parse_to: resource
+      # Drop this collector's own output to avoid a feedback loop.
+      - type: filter
+        expr: 'body matches "otelcol\\.component" or body matches "fileconsumer"'
+
+processors:
+  resource:
+    attributes:
+      - action: insert
+        key: host.name
+        value: {{ triage_otel_host_name }}
+      - action: insert
+        key: deployment.environment
+        value: cires
+      - action: insert
+        key: service.name
+        value: gpu-stack
+  batch:
+    send_batch_size: 200
+    send_batch_max_size: 200
+    timeout: 5s
+
+exporters:
+  otlphttp/loki:
+    endpoint: "http://{{ triage_monitoring_host }}:{{ loki_port | default(3100) }}/otlp"
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+    endpoint: "0.0.0.0:13133"
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    logs:
+      receivers: [filelog/containers]
+      processors: [resource, batch]
+      exporters: [otlphttp/loki]

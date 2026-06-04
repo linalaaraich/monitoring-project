@@ -21,7 +21,11 @@ app_db_port: 3306
 spring_profile: "int"
 app_port: 8080
 
-mysql_database: "app-db"
+# A-8 (2026-06-04): was "app-db" (hyphen). The live RDS schema is `app_db`
+# (underscore) — the 2026-06-02 dump was restored into app_db. MySQL treats the
+# two as different identifiers, so the hyphen form fed a non-existent DB into
+# spring_datasource_url. The live app uses Helm values, but the IaC must match.
+mysql_database: "app_db"
 mysql_user: "appuser"
 mysql_password: "123456789"
 

@@ -1,4 +1,10 @@
 ---
+# =============================================================================
+# LEGACY VM PATH — NOT used on the new account (audit drift A-7).
+# Kong now runs in k3s via the kong/kong Helm release (charts/kong), not as
+# docker-compose on a `network` VM. The `network` host group does NOT exist in
+# inventory/newacct.yml. Kept for reference / on-prem fallback only.
+# =============================================================================
 - name: Common setup for network hosts
   hosts: network
   roles:

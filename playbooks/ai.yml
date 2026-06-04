@@ -1,4 +1,12 @@
 ---
+# =============================================================================
+# LEGACY VM PATH — superseded (audit drift A-3/A-7).
+# This play targets the `ai` host group, which does NOT exist in
+# inventory/newacct.yml (the GPU host is in the `gpu_triage` group). The live
+# GPU triage stack is now codified by roles/triage_stack via playbooks/gpu.yml
+# (which faithfully captures /opt/triage). Kept for reference only — use
+# playbooks/gpu.yml for the new account.
+# =============================================================================
 - name: Common setup for AI/LLM hosts
   hosts: ai
   roles:

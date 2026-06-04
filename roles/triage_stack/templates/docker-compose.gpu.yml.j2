@@ -1,0 +1,252 @@
+# =============================================================================
+# CIRES AI stack — docker-compose for the dedicated GPU EC2 box.
+# MANAGED BY ANSIBLE (roles/triage_stack) — templated to
+# {{ triage_stack_dir }}/docker-compose.gpu.yml on every playbook run.
+# DO NOT EDIT BY HAND — changes are overwritten on the next run. Adjust the
+# role defaults / group_vars (inventory/group_vars/gpu_triage.yml) instead.
+#
+# Target: AWS g5.xlarge in us-west-2 (A10G 24 GB VRAM, Ubuntu 22.04 +
+# nvidia-container-toolkit). Captured 2026-06-04 from the live hand-managed
+# /opt/triage/docker-compose.gpu.yml as part of closing audit drift A-3.
+#
+# Key deltas vs the adolin-wsl laptop compose:
+#   - Ollama runs as a HOST systemd unit (not a compose service); containers
+#     reach it via host.docker.internal:11434 (see extra_hosts).
+#   - OLLAMA_MODEL qwen2.5:14b primary on the A10G (7b pulled as fallback).
+#   - Upstream observability endpoints use Tailscale MagicDNS, not an IP literal.
+#   - MCP images pulled from GHCR (linalaaraich org).
+#   - Ports: triage 8090 only (sg-gpu opens 11434 from VPC on the host).
+#
+# Network model: bridge. Tailscale runs on the HOST; bridge containers inherit
+# the host resolver, so MCP containers resolve the MagicDNS names directly.
+# =============================================================================
+
+name: ai-stack
+
+networks:
+  ai-stack:
+    driver: bridge
+    name: ai-stack
+
+volumes:
+  # SQLite RCA history + Drain3 state. Shared between triage (writer) and
+  # rca-history-mcp (reader). SQLite needs RW even for the reader (rollback
+  # journal), so mount RW on both sides.
+  triage_data:
+    name: ai-stack_triage_data
+
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # NOTE: Ollama runs as a systemd unit DIRECTLY ON THE HOST, not as a compose
+  # service. Installed via `curl -fsSL https://ollama.com/install.sh | sh` and
+  # pulls {{ triage_ollama_model }} + the 7b fallback onto the host GPU.
+  # Containers reach it at host.docker.internal:11434 (see extra_hosts).
+  # ---------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------
+  # Triage service — orchestrator. GHCR image. Reads Grafana webhooks, fans
+  # out to MCPs, calls Ollama, writes rca_history.db, sends email on escalate.
+  # ---------------------------------------------------------------------------
+  triage-service:
+    image: "${TRIAGE_IMAGE:-ghcr.io/linalaaraich/monitoring-triage-service:${TRIAGE_TAG:-main}}"
+    container_name: ai-triage-service
+    hostname: triage-service
+    networks: [ai-stack]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "{{ triage_service_port }}:8090"
+    volumes:
+      - triage_data:/data
+      - ./drain3.ini:/etc/drain3/drain3.ini:ro
+    env_file:
+      - ./.env
+    environment:
+      # --- Ollama (host-level, reached via docker0 gateway) ---
+      OLLAMA_URL: "http://host.docker.internal:11434"
+      OLLAMA_MODEL: "{{ triage_ollama_model }}"
+      OLLAMA_REQUEST_TIMEOUT: "${OLLAMA_REQUEST_TIMEOUT:-300}"
+      PIPELINE_TIMEOUT: "${PIPELINE_TIMEOUT:-900}"
+      CIRCUIT_BREAKER_FAILURE_THRESHOLD: "5"
+      CIRCUIT_BREAKER_COOLDOWN_SECONDS: "60"
+
+      # --- MCP bridges (compose-DNS) ---
+      PROMETHEUS_MCP_URL: "http://prometheus-mcp:8091"
+      LOKI_MCP_URL: "http://loki-mcp:8092"
+      JAEGER_MCP_URL: "http://jaeger-mcp:8093"
+      DRAIN3_MCP_URL: "http://drain3-mcp:8094"
+      RCA_HISTORY_MCP_URL: "http://rca-history-mcp:8095"
+
+      # --- Direct Loki for Drain3 background ingestion (bulk path) ---
+      LOKI_API_URL: "http://{{ triage_monitoring_host }}:{{ loki_port | default(3100) }}"
+
+      # --- Email links + dashboard ---
+      GRAFANA_DASHBOARD_URL: "http://{{ triage_monitoring_host }}:{{ grafana_port | default(3000) }}"
+      GRAFANA_URL: "http://{{ triage_monitoring_host }}:{{ grafana_port | default(3000) }}"
+      # 2026-06-04: detail-page CIRES_LINKS for Open Loki / Open Jaeger were
+      # falling back to the old-account IP because only LOKI_API_URL was set,
+      # not LOKI_URL. Make the dashboard-facing UI URLs explicit.
+      LOKI_URL: "http://{{ triage_monitoring_host }}:{{ loki_port | default(3100) }}"
+      JAEGER_URL: "http://{{ triage_monitoring_host }}:{{ jaeger_port_ui | default(16686) }}"
+      GRAFANA_API_USER: "{{ triage_grafana_api_user }}"
+      GRAFANA_API_PASSWORD: "{{ triage_grafana_api_password }}"
+
+      # --- Evidence bundle sizing (continuity with laptop deploy) ---
+      PROMETHEUS_RANGE_MINUTES: "10"
+      LOKI_LOG_LIMIT: "50"
+      JAEGER_TRACE_LIMIT: "10"
+
+      # --- Drain3 ---
+      DRAIN3_STATE_DIR: "/data/drain3_state"
+      DRAIN3_POLL_INTERVAL: "30"
+      DRAIN3_ANOMALY_THRESHOLD: "5"
+      DRAIN3_ALERT_ENABLED: "true"
+      DRAIN3_ALERT_MIN_LINES: "20"
+      DRAIN3_ALERT_RATE_THRESHOLD: "0.02"
+      DRAIN3_ALERT_COOLDOWN_SECONDS: "600"
+
+      # --- RCA store + suppression (Layer 2) ---
+      RCA_DB_PATH: "/data/rca_history.db"
+      TRIAGE_SUPPRESSION_ENABLED: "true"
+      TRIAGE_HISTORY_LOOKBACK_MINUTES: "15"
+      DEDUP_WINDOW_SECONDS: "300"
+      TRIAGE_BOUNDED_AGENCY_ENABLED: "true"
+      TRIAGE_DATA_STARVED_RETRY_ENABLED: "true"
+      STARTUP_BACKFILL_THRESHOLD_MINUTES: "15"
+      STARTUP_BACKFILL_MAX_GAP_HOURS: "24"
+
+      # --- Context gather timeout (pillar fan-out budget) ---
+      CONTEXT_TIMEOUT: "8"
+
+      # SMTP_*, NOTIFICATION_EMAIL come from ./.env (templated, gitignored).
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ---------------------------------------------------------------------------
+  # MCP: Prometheus. Stateless. Talks to the monitoring VM over Tailscale.
+  # ---------------------------------------------------------------------------
+  prometheus-mcp:
+    image: "${MCP_PROMETHEUS_IMAGE:-ghcr.io/linalaaraich/mcp-prometheus:${IMAGE_TAG:-main}}"
+    container_name: ai-mcp-prometheus
+    hostname: prometheus-mcp
+    networks: [ai-stack]
+    environment:
+      PROMETHEUS_URL: "http://{{ triage_monitoring_host }}:{{ prometheus_port | default(9090) }}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8091/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # MCP: Loki. Stateless.
+  # ---------------------------------------------------------------------------
+  loki-mcp:
+    image: "${MCP_LOKI_IMAGE:-ghcr.io/linalaaraich/mcp-loki:${IMAGE_TAG:-main}}"
+    container_name: ai-mcp-loki
+    hostname: loki-mcp
+    networks: [ai-stack]
+    environment:
+      LOKI_URL: "http://{{ triage_monitoring_host }}:{{ loki_port | default(3100) }}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8092/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # MCP: Jaeger. Stateless.
+  # ---------------------------------------------------------------------------
+  jaeger-mcp:
+    image: "${MCP_JAEGER_IMAGE:-ghcr.io/linalaaraich/mcp-jaeger:${IMAGE_TAG:-main}}"
+    container_name: ai-mcp-jaeger
+    hostname: jaeger-mcp
+    networks: [ai-stack]
+    environment:
+      JAEGER_URL: "http://{{ triage_monitoring_host }}:{{ jaeger_port_ui | default(16686) }}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8093/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # MCP: Drain3. /health calls back into triage, so depends on triage healthy.
+  # ---------------------------------------------------------------------------
+  drain3-mcp:
+    image: "${MCP_DRAIN3_IMAGE:-ghcr.io/linalaaraich/mcp-drain3:${IMAGE_TAG:-main}}"
+    container_name: ai-mcp-drain3
+    hostname: drain3-mcp
+    networks: [ai-stack]
+    depends_on:
+      triage-service:
+        condition: service_healthy
+    environment:
+      TRIAGE_SERVICE_URL: "http://triage-service:8090"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8094/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # OTel Collector — ships every container's stdout/stderr on this host to the
+  # central Loki on the monitoring VM (Phase 2, 2026-06-03). Runs as root so it
+  # can read root-owned /var/lib/docker/containers/* json-log files.
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: ai-otel-collector
+    hostname: otel-collector
+    networks: [ai-stack]
+    user: "0:0"
+    volumes:
+      - ./otel-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    restart: unless-stopped
+    # No healthcheck - the contrib image is distroless (no shell). The
+    # health_check extension is exposed on :13133 for external probes.
+
+  # ---------------------------------------------------------------------------
+  # MCP: RCA history. SQLite reader. Same /data volume as triage (must be RW).
+  # ---------------------------------------------------------------------------
+  rca-history-mcp:
+    image: "${MCP_RCA_HISTORY_IMAGE:-ghcr.io/linalaaraich/mcp-rca-history:${IMAGE_TAG:-main}}"
+    container_name: ai-mcp-rca-history
+    hostname: rca-history-mcp
+    networks: [ai-stack]
+    depends_on:
+      triage-service:
+        condition: service_healthy
+    volumes:
+      - triage_data:/data
+    environment:
+      RCA_DB_PATH: "/data/rca_history.db"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8095/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

@@ -8,10 +8,38 @@ remote_build_dir: /opt/image-build
 triage_service_local_repo: "{{ playbook_dir }}/../../monitoring-triage-service"
 mcp_servers_local_repo: "{{ playbook_dir }}/../../monitoring-mcp-servers"
 
-# Images to build and import into k3s containerd
-# context_subdir: directory within remote_build_dir that contains the Dockerfile context
-# dockerfile_rel: path to Dockerfile relative to context_subdir
+# Images to build and import into k3s containerd.
+#
+# Two source shapes are supported per entry:
+#   1. src_repo (+ remote_subdir, dockerfile_rel): an rsync'd source tree from
+#      the control machine, built with `docker build -f <subdir>/<dockerfile_rel>
+#      <subdir>`. Used by the first-party triage + MCP images, whose source
+#      lives in sibling repos on the control machine.
+#   2. dockerfile_template (+ remote_subdir): a single Dockerfile rendered from
+#      a checked-in Jinja2 template in THIS repo into <remote_subdir>/Dockerfile,
+#      then built with that dir as the (otherwise empty) context. Used for
+#      cires/spring-boot, whose Dockerfile self-clones the upstream app source
+#      at build time, so no source rsync is needed.
+#
+# remote_subdir: directory within remote_build_dir holding the build context.
+# dockerfile_rel: path to the Dockerfile relative to remote_subdir (shape 1).
 first_party_images:
+  # cires/spring-boot — the employees-backend app image the spring-boot Helm
+  # chart now defaults to (charts/spring-boot/values.yaml: repository
+  # cires/spring-boot). The upstream mukundmadhav/react-springboot-mysql:latest
+  # Docker Hub tag is dead, so the image cannot be pulled; it must be built.
+  #
+  # REPLACES the manual port: previously the image existed on the k3s node ONLY
+  # because the real-induction agent hand-copied it out of the old-account
+  # containerd ("IMAGE PORTING IS FRAGILE", 2026-06-02 handoff). A fresh
+  # `k3s.yml --tags images` would have left the spring-boot pod in ErrImagePull.
+  # The Dockerfile (roles/spring_backend/templates/Dockerfile.j2) self-clones
+  # the upstream app and bakes in the actuator/Prometheus + histogram config,
+  # so building it here makes the app image reproducible straight from IaC with
+  # no source rsync and no live registry dependency.
+  - name: cires/spring-boot
+    dockerfile_template: "{{ playbook_dir }}/../roles/spring_backend/templates/Dockerfile.j2"
+    remote_subdir: spring-boot
   - name: cires/triage-service
     src_repo: "{{ triage_service_local_repo }}"
     remote_subdir: triage-service

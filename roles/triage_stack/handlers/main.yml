@@ -1,0 +1,13 @@
+---
+# Restart the triage stack when a templated config changes — but only when the
+# operator has explicitly opted into applying (triage_stack_apply=true). On a
+# capture/verify run (the default) the handler is a no-op so the live stack is
+# never disrupted by a `--diff` drift check.
+- name: restart triage stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ triage_stack_dir }}"
+    files:
+      - docker-compose.gpu.yml
+    state: present
+    recreate: always
+  when: triage_stack_apply | bool

@@ -1,0 +1,78 @@
+---
+# Defaults for the triage_stack role — the GPU triage host's hand-managed
+# /opt/triage compose stack, codified 2026-06-04 to close audit drift A-3.
+# Override in inventory/group_vars/gpu_triage.yml or via --extra-vars.
+
+# Where the compose stack lives on the GPU host (matches live /opt/triage).
+triage_stack_dir: "/opt/triage"
+
+# Service port exposed by the triage orchestrator.
+triage_service_port: 8090
+
+# Monitoring VM (Grafana + Prometheus + Loki + Jaeger). Tailscale MagicDNS
+# preferred over EIPs so re-provisioning doesn't break the link. The GPU host
+# is a tailnet node and bridge containers inherit its resolver, so MagicDNS
+# resolves here. Defaults to the per-host monitoring_vm_public_ip when set
+# (newacct.yml sets it to the new MagicDNS name), else the new-account host.
+triage_monitoring_host: "{{ monitoring_vm_public_ip | default('observability-rca-newacct-monitoring') }}"
+
+# Monitoring service ports (fall back to all.yml's port vars if defined).
+grafana_port: "{{ grafana_port | default(3000) }}"
+loki_port: "{{ loki_port | default(3100) }}"
+prometheus_port: "{{ prometheus_port | default(9090) }}"
+jaeger_port_ui: "{{ jaeger_port_ui | default(16686) }}"
+
+# Image tags. GHCR :main for both triage + MCPs (Watchtower auto-pulls newer
+# :main builds between runs; this is what the deploy requests).
+triage_image_tag: "main"
+mcp_image_tag: "main"
+
+# Ollama model on the host GPU. 14b primary on the A10G; 7b is the fallback.
+triage_ollama_model: "qwen2.5:14b"
+
+# OTel resource host.name label for this host's container logs.
+triage_otel_host_name: "gpu-uswest2-newacct"
+
+# Grafana API creds (weak default; matches current deploy).
+triage_grafana_api_user: "admin"
+triage_grafana_api_password: "admin"
+
+# Triage knobs (match the live .env on the GPU host).
+triage_prometheus_range_minutes: 30
+triage_loki_log_limit: 500
+triage_jaeger_trace_limit: 100
+triage_context_timeout: 8
+
+triage_dedup_window_seconds: 600
+triage_suppression_enabled: true
+triage_history_lookback_minutes: 15
+triage_data_starved_retry_enabled: true
+triage_bounded_agency_enabled: true
+
+triage_drain3_alert_enabled: true
+triage_drain3_alert_rate_threshold: 0.02
+triage_drain3_alert_min_lines: 20
+triage_drain3_alert_cooldown_seconds: 600
+
+# GPU is ~10x faster than the laptop GTX 1060, but keep generous headroom for
+# cold-start first calls with large context + structured-output schema.
+triage_ollama_request_timeout: 1800
+triage_pipeline_timeout: 2400
+triage_circuit_breaker_failure_threshold: 5
+triage_circuit_breaker_cooldown_seconds: 60
+
+triage_startup_backfill_threshold_minutes: 15
+triage_startup_backfill_max_gap_hours: 24
+
+# SMTP — for escalation emails. Password resolved at run time from the
+# controller env (GRAFANA_SMTP_PASSWORD); NEVER stored in the repo. Mirrors
+# the lookup('env', ...) pattern in group_vars/ai.yml + the triage_laptop role.
+triage_smtp_host: "smtp.gmail.com"
+triage_smtp_port: 587
+triage_smtp_user: "laaraichlina@gmail.com"
+triage_smtp_password: "{{ lookup('env', 'GRAFANA_SMTP_PASSWORD') }}"
+triage_smtp_from: "laaraichlina@gmail.com"
+triage_notification_email: "laaraichlina@gmail.com"
+
+# Run `docker compose pull` before `up -d` to fetch newer GHCR images.
+triage_compose_pull: true

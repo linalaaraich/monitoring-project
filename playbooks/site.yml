@@ -6,6 +6,7 @@
 #   ansible-playbook playbooks/monitoring.yml        # Monitoring VM only
 #   ansible-playbook playbooks/k3s.yml               # k3s bootstrap + images
 #   ansible-playbook playbooks/k8s-manifests.yml     # K8s manifests (OTel, NVIDIA, Prom RBAC)
+#   ansible-playbook playbooks/gpu.yml               # GPU triage stack (codifies /opt/triage; apply-with-care)
 #   ansible-playbook playbooks/integration-k8s.yml   # E2E validation
 #
 # After site.yml completes, install Helm charts manually:
@@ -26,6 +27,12 @@
 # Step 4: Helm charts are installed manually (see commands above)
 # Step 5: Run validation
 # - import_playbook: integration-k8s.yml
+
+# GPU triage stack (codifies the live hand-managed /opt/triage — A-3).
+# Deliberately NOT in the default site.yml flow: it's apply-with-care and
+# targets a separate host group (gpu_triage). Run it on its own and only with
+# `-e triage_stack_apply=true` when you intend to (re)deploy. See playbooks/gpu.yml.
+# - import_playbook: gpu.yml
 
 # Legacy VM-based deployment (replaced by k3s in Sprint 2 extension)
 # - import_playbook: application.yml

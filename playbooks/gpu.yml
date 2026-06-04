@@ -1,0 +1,25 @@
+---
+# =============================================================================
+# GPU triage host — codifies the live hand-managed /opt/triage stack (A-3).
+# Targets the `gpu_triage` group (inventory/newacct.yml).
+#
+# APPLY WITH CARE. By default this only TEMPLATES the compose / .env /
+# otel-config / drain3.ini onto the host and does NOT (re)start anything —
+# the goal is that the repo MATCHES the live crown-jewel host, not to
+# re-deploy it. Verify the capture is drift-free first:
+#
+#     export GRAFANA_SMTP_PASSWORD="<gmail-app-password>"   # only needed for apply
+#     ansible-playbook -i inventory/newacct.yml playbooks/gpu.yml --check --diff
+#
+# Only when you intend to (re)deploy:
+#     ansible-playbook -i inventory/newacct.yml playbooks/gpu.yml -e triage_stack_apply=true
+#
+# Ollama runs as a HOST systemd unit (installed by EC2 user-data), reached at
+# host.docker.internal:11434 — it is intentionally NOT managed by this play.
+# =============================================================================
+- name: Codify the GPU triage stack
+  hosts: gpu_triage
+  become: false          # compose + /opt/triage run as the `ubuntu` user
+  roles:
+    - triage_stack
+  tags: [gpu, triage]

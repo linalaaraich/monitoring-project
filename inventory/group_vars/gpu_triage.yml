@@ -1,0 +1,16 @@
+---
+# Group vars for the GPU triage host (gpu_triage group in inventory/newacct.yml).
+# Codifies the live hand-managed /opt/triage stack (audit drift A-3, 2026-06-04).
+# Most knobs live in roles/triage_stack/defaults/main.yml; override here only to
+# diverge from that source-of-truth.
+
+# Where the compose stack lives on the GPU host.
+triage_stack_dir: "/opt/triage"
+
+# SAFE DEFAULT: a plain run only writes templates and does NOT restart the live
+# stack. Set `-e triage_stack_apply=true` on the command line when you actually
+# intend to (re)deploy the crown-jewel host.
+triage_stack_apply: false
+
+# Model on the host GPU (A10G 24 GB): qwen2.5:14b primary, 7b fallback.
+triage_ollama_model: "qwen2.5:14b"

@@ -1,0 +1,104 @@
+---
+# =============================================================================
+# triage_stack — CODIFIES the live hand-managed GPU triage stack (/opt/triage).
+# APPLY WITH CARE. Captured 2026-06-04 from the live host to close audit drift
+# A-3 (the GPU host's docker-compose.gpu.yml + .env + the 7 ai-* containers
+# were hand-managed, NOT under Ansible). The GOAL is that the repo MATCHES live,
+# not to re-deploy now.
+#
+# Safe-by-default workflow:
+#   1. Template the compose / .env / otel-config / drain3.ini onto the host.
+#      Verify drift-free with `--check --diff` FIRST — it must report no
+#      meaningful changes against the live files before you trust it.
+#   2. Compose up/pull is GATED behind `triage_stack_apply` (default FALSE) so
+#      a plain run can't restart the crown-jewel host. Set
+#      `-e triage_stack_apply=true` only when you intend to (re)deploy.
+#
+# Ollama is NOT managed here — it runs as a host systemd unit (installed by EC2
+# user-data); containers reach it at host.docker.internal:11434.
+# =============================================================================
+
+- name: Ensure the triage stack directory exists
+  file:
+    path: "{{ triage_stack_dir }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Template the GPU triage docker-compose
+  template:
+    src: docker-compose.gpu.yml.j2
+    dest: "{{ triage_stack_dir }}/docker-compose.gpu.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+  notify: restart triage stack
+
+- name: Template the OTel Collector config
+  template:
+    src: otel-config.yaml.j2
+    dest: "{{ triage_stack_dir }}/otel-config.yaml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+  notify: restart triage stack
+
+- name: Template the Drain3 config
+  template:
+    src: drain3.ini.j2
+    dest: "{{ triage_stack_dir }}/drain3.ini"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+  notify: restart triage stack
+
+# .env carries the SMTP app-password (from GRAFANA_SMTP_PASSWORD on the
+# controller). 0600 + gitignored. Fail loudly if the secret isn't set so we
+# never silently render an empty password into the live escalation path.
+- name: Assert SMTP password is available from the controller environment
+  assert:
+    that:
+      - triage_smtp_password is defined
+      - triage_smtp_password | length > 0
+    fail_msg: >-
+      GRAFANA_SMTP_PASSWORD is not set in the controller environment.
+      Export it before running:  export GRAFANA_SMTP_PASSWORD="<gmail-app-password>"
+  when: triage_stack_apply | bool
+
+- name: Template the triage .env (secrets from controller env; mode 0600)
+  template:
+    src: env.j2
+    dest: "{{ triage_stack_dir }}/.env"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+  notify: restart triage stack
+
+# --- Compose lifecycle: GATED. Only runs when explicitly opted in. ----------
+- name: Pull GHCR images
+  community.docker.docker_compose_v2:
+    project_src: "{{ triage_stack_dir }}"
+    files:
+      - docker-compose.gpu.yml
+    pull: always
+    state: present
+  when:
+    - triage_stack_apply | bool
+    - triage_compose_pull | bool
+
+- name: Bring up the triage stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ triage_stack_dir }}"
+    files:
+      - docker-compose.gpu.yml
+    state: present
+  when: triage_stack_apply | bool
+
+- name: Notice — apply gated off
+  debug:
+    msg: >-
+      triage_stack_apply is false: templates were written to {{ triage_stack_dir }}
+      but the compose stack was NOT (re)started. Re-run with
+      -e triage_stack_apply=true to deploy.
+  when: not (triage_stack_apply | bool)

@@ -1,4 +1,12 @@
 ---
+# =============================================================================
+# LEGACY VM PATH — NOT used on the new account (audit drift A-7/A-10).
+# The app (employees-backend / spring-boot) + Kong now run in k3s via Helm
+# (charts/spring-boot, kong/kong release). This docker-compose-on-a-VM path
+# targets the `application` host group, which does NOT exist in
+# inventory/newacct.yml — so this playbook cannot deploy there. Kept for
+# reference / on-prem fallback only; do not run against the live estate.
+# =============================================================================
 - name: Common setup for application hosts
   hosts: application
   roles:
