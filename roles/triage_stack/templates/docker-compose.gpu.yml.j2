@@ -215,16 +215,28 @@ services:
   # can read root-owned /var/lib/docker/containers/* json-log files.
   # ---------------------------------------------------------------------------
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.120.0
+    # Pinned ≥0.145.0: G2 Docker service discovery needs the docker_observer
+    # `include_all_containers` flag (emits a port-less endpoint per container),
+    # which only landed in 0.145.0 — our ai-*/mcp-* containers publish no host
+    # ports, so older observers discover ZERO of them. Config validated against
+    # 0.145.0 + 0.153.0 with `otelcol-contrib validate`. This collector is
+    # logs-only (container logs + the ollama host log), so the bump's blast
+    # radius is confined to GPU-host log shipping. Was 0.120.0 (apply-time map).
+    image: otel/opentelemetry-collector-contrib:0.145.0
     container_name: ai-otel-collector
     hostname: otel-collector
     networks: [ai-stack]
     user: "0:0"
     volumes:
       - ./otel-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-      # G2: read every container's json-log; the OTTL map keys service_name off
-      # the container ID in the file path (id→name gathered at apply time).
+      # G2: read every container's json-log file. service_name is now resolved
+      # live by the docker_observer extension (Docker service discovery), not a
+      # stale apply-time id→name map — see otel-config.yaml header.
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # G2: docker_observer talks to the daemon API to discover containers +
+      # their names. Read-only mount (the collector only lists/inspects/watches
+      # events). Front with a docker-socket-proxy in production (EPIC15).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       # G5: Ollama is a HOST systemd unit; a systemd drop-in mirrors its
       # stdout/stderr to this file (the collector image has no journalctl to
       # read journald), and filelog tails it as service_name=ollama.

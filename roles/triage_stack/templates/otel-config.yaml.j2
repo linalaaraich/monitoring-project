@@ -1,61 +1,77 @@
 # =============================================================================
 # OTel Collector config for the dedicated GPU EC2 box (Phase 2, 2026-06-03;
-# G2/G5 unified-view fixes 2026-06-04).
+# G2/G5 unified-view fixes 2026-06-04; G2 Docker-SD rewrite 2026-06-08).
 # MANAGED BY ANSIBLE (roles/triage_stack) — templated to
 # {{ triage_stack_dir }}/otel-config.yaml. DO NOT EDIT BY HAND.
 #
 # Ships, to the central monitoring VM:
-#   - per-container stdout/stderr for the triage + 6 ai-* containers (G2)
-#   - the Ollama HOST systemd unit's journal (G5 — was never shipped; Ollama
-#     is a host unit, not a container, so filelog never saw it)
+#   - per-container stdout/stderr for the triage + ai-* containers (G2), each on
+#     its OWN service_name Loki stream, named live from the Docker daemon
+#   - the Ollama HOST systemd unit's journal (G5 — Ollama is a host unit, not a
+#     container, so filelog never saw its journald output)
 # all to the central Loki via Loki's native OTLP ingest (/otlp).
 #
-# G2 HONESTY CAVEAT (2026-06-04 PM audit): the per-id service.name mapping below
-# is PARTIAL and FRAGILE. It pins service.name from the live container-id→name
-# map gathered at apply time, so a container RECREATE (new id) silently falls
-# back to `gpu-stack` until the next ansible run. This is a known stopgap, NOT a
-# closed item — the correct fix is Docker service-discovery (Alloy/Promtail or
-# the receiver_creator), folded into Sprint 5 (EPIC13/observability). G5 (the
-# Ollama host-unit log file) IS stable and complete.
+# G2 — DOCKER SERVICE DISCOVERY (closes the old apply-time stopgap).
+#   The previous design pinned service.name from a container-id->name map
+#   gathered once at `ansible` apply time. Docker IDs change on every recreate
+#   (image pull, compose up, OOM-restart-with-recreate), so a recreated
+#   container's new id matched no rule and its logs silently collapsed into a
+#   single `gpu-stack` catch-all until the next apply — fragile, and exactly the
+#   failure mode the 2026-06-04 audit flagged.
+#   This version uses the contrib image's `docker_observer` extension +
+#   `receiver_creator` (REQUIRES collector >= 0.145.0 for the observer's
+#   `include_all_containers` flag — see the compose image pin): the observer
+#   watches the Docker daemon's event stream
+#   and, for every running container, spins up a filelog receiver that tails
+#   THAT container's json-log and stamps service.name from the live container
+#   name. On a recreate the observer rediscovers the new id within
+#   cache_sync_interval and re-templates the path — no stale fallback, no apply
+#   needed. Stream names are identical to before (the container name), so no
+#   downstream (drain3 per-service miners, BE-B3 infra exclusion) change.
+#
+#   SECURITY NOTE (prod / EPIC15): docker_observer needs the Docker socket. We
+#   mount it read-only, but a mounted socket still grants daemon API access. For
+#   the PoC GPU box this is acceptable (the collector already runs as root to
+#   read /var/lib/docker/containers). For production, front it with a read-only
+#   docker-socket-proxy restricted to container list/inspect/events.
+#
+# G5 (Ollama host-unit log file) IS stable and complete — unchanged here.
 #
 # Network: bridge; Tailscale MagicDNS resolves via the host resolver inherited
 # from /etc/resolv.conf, same as the MCP containers.
 # =============================================================================
 
 receivers:
-  # --- Container stdout/stderr → per-service Loki stream (G2) ---
+  # --- Container stdout/stderr -> per-service Loki stream (G2, Docker SD) ---
   # docker json-file lines are {"log","stream","time"}; json_parser pulls the
-  # message out, then we set service.name on the RESOURCE directly from the
-  # container ID in the log file path (the id→name map is gathered live at apply
-  # time — see the docker-ps task). Done in stanza, NOT the k8s-oriented
-  # `container` operator (which errors "failed to detect a valid log path" on
-  # docker paths in 0.120). Each ai-* container gets its own stream; unknown
-  # ids fall back to gpu-stack.
-  filelog/containers:
-    include:
-      - /var/lib/docker/containers/*/*-json.log
-    start_at: end
-    include_file_path: true
-    operators:
-      - type: json_parser
-        parse_from: body
-      - type: move
-        from: attributes.log
-        to: body
-        if: "attributes.log != nil"
-{% for _line in (triage_docker_ps.stdout_lines | default([])) %}
-{% set _p = _line.split() %}
-{% if _p | length >= 2 %}
-      - type: add
-        field: resource["service.name"]
-        value: "{{ _p[1] }}"
-        if: 'attributes["log.file.path"] matches "{{ _p[0] }}"'
-{% endif %}
-{% endfor %}
-      - type: add
-        field: resource["service.name"]
-        value: "gpu-stack"
-        if: 'resource["service.name"] == nil'
+  # message out of `body`, then we move it back to `body`. We deliberately do
+  # NOT use the stanza `container` operator: it auto-detects the log format from
+  # the file path and errors "failed to detect a valid log path" on docker paths
+  # in 0.120 (the k8s /var/log/pods layout is the only one it recognises).
+  receiver_creator/containers:
+    watch_observers: [docker_observer]
+    receivers:
+      filelog:
+        # One filelog per running container. `include_all_containers` makes the
+        # observer also emit a PORT-LESS endpoint per container (port == 0);
+        # scoping on `port == 0` guarantees exactly one receiver per container
+        # even for containers that publish host ports (e.g. node-exporter).
+        rule: type == "container" && port == 0
+        config:
+          include:
+            - /var/lib/docker/containers/`container_id`/`container_id`-json.log
+          start_at: end
+          include_file_path: true
+          operators:
+            - type: json_parser
+              parse_from: body
+            - type: move
+              from: attributes.log
+              to: body
+              if: "attributes.log != nil"
+        resource_attributes:
+          # Live container name from the Docker daemon — recreate-stable.
+          service.name: '`name`'
 
   # --- Ollama host unit logs (G5) ---
   # Ollama is a HOST systemd unit, so its logs go to journald — which this image
@@ -78,9 +94,16 @@ processors:
         key: deployment.environment
         value: cires
 
-  # (G2 service.name is now set directly in the filelog stanza operators above —
-  # the OTTL/groupbyattrs resource-context approach didn't fire because filelog's
-  # log.file.path isn't where a resource-context match could see it.)
+  # Defensive: the Docker API returns container names as "/ai-mcp-prometheus".
+  # docker_observer normally strips the leading slash, but strip it here too so
+  # a future observer change can never leak a "/"-prefixed service_name label
+  # into Loki (which would split a service's stream in two).
+  transform/clean_service_name:
+    error_mode: ignore
+    log_statements:
+      - context: resource
+        statements:
+          - replace_pattern(attributes["service.name"], "^/", "") where attributes["service.name"] != nil
 
   # G5: tag the Ollama log-file stream.
   resource/ollama:
@@ -104,16 +127,27 @@ extensions:
   health_check:
     endpoint: "0.0.0.0:13133"
 
+  # Docker service discovery for the container-log pipeline (G2).
+  docker_observer:
+    endpoint: unix:///var/run/docker.sock
+    # Re-list containers every 5s so a RECREATE (new id) is rediscovered fast,
+    # instead of waiting out the 60m default resync. The event stream catches
+    # start/stop in real time; this interval is the backstop reconcile.
+    cache_sync_interval: 5s
+    # Emit an endpoint for EVERY running container, not only those publishing a
+    # host port — our ai-* / mcp-* containers mostly publish none.
+    include_all_containers: true
+
 service:
-  extensions: [health_check]
+  extensions: [health_check, docker_observer]
   telemetry:
     logs:
       level: warn
   pipelines:
-    # Container logs -> per-service stream (G2).
+    # Container logs -> per-service stream (G2, Docker SD).
     logs/containers:
-      receivers: [filelog/containers]
-      processors: [resource/common, batch]
+      receivers: [receiver_creator/containers]
+      processors: [resource/common, transform/clean_service_name, batch]
       exporters: [otlphttp/loki]
     # Ollama host-unit log file -> service_name=ollama (G5).
     logs/ollama:

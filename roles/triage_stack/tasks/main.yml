@@ -35,17 +35,11 @@
     mode: "0644"
   notify: restart triage stack
 
-# G2: docker json-file log paths carry only the container ID, and the OTel
-# `container` operator's add_metadata_from_filepath resolves NAMES only for the
-# k8s path pattern — so docker logs fell back to one `gpu-stack` stream. Gather
-# the live id→name map and template per-id OTTL rules so each container gets its
-# own service_name stream. Re-rendered on every apply (IDs change on recreate).
-- name: Gather running container id→name map (G2 per-container log naming)
-  command: "docker ps --no-trunc --format '{% raw %}{{.ID}} {{.Names}}{% endraw %}'"
-  register: triage_docker_ps
-  changed_when: false
-  check_mode: false
-
+# G2: the OTel collector resolves per-container service_name live via the
+# docker_observer extension + receiver_creator (Docker service discovery) — see
+# the otel-config.yaml.j2 header. The old apply-time `docker ps` id→name map was
+# removed 2026-06-08: it went stale on every container recreate (new id ->
+# `gpu-stack` catch-all). No host-side gather step is needed anymore.
 - name: Template the OTel Collector config
   template:
     src: otel-config.yaml.j2
