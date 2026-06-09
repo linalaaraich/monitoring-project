@@ -142,7 +142,7 @@ groups:
           - refId: A
             datasourceUid: prometheus
             model:
-              expr: '(sum(rate(otelcol_processor_dropped_spans_total[5m])) / clamp_min(sum(rate(otelcol_receiver_accepted_spans_total[5m])), 1))'
+              expr: '((sum(rate(otelcol_exporter_send_failed_spans[5m])) + sum(rate(otelcol_receiver_refused_spans[5m]))) / clamp_min(sum(rate(otelcol_receiver_accepted_spans[5m])), 1))'
               instant: false
               range: true
               intervalMs: 15000
