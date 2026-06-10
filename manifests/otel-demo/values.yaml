@@ -40,6 +40,20 @@ default:
     - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
       value: cumulative
 
+# O-3 (2026-06-10): accounting (the demo's .NET/Kafka consumer, known
+# upstream-hungry) OOMKilled every ~17-19 min at the chart-default 120Mi limit
+# (420+ restarts over 5d). Bumped to 256Mi AFTER first proving the new
+# PodCrashLooping alert goes Pending->Firing on the real loop (real-induction
+# evidence, 2026-06-10) — sequencing was deliberate: alert proven on live
+# breach, then symptom fixed so the bed is stable for induction tests.
+# Requests are left unset (default to the limit) — node had ~36% memory
+# requests allocated at the time, so scheduling headroom is fine.
+components:
+  accounting:
+    resources:
+      limits:
+        memory: 256Mi
+
 # Reuse the platform's single pipeline — disable everything bundled.
 opentelemetry-collector:
   enabled: false
