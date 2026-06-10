@@ -55,6 +55,12 @@ spec:
             - name: metrics
               containerPort: 8888
               protocol: TCP
+            # O-2: `prometheus` exporter endpoint serving the otel-demo app
+            # metrics (scraped via the k3s API-server pod proxy; no hostPort
+            # needed). See configmap.yaml + prometheus.yml.j2.
+            - name: prom-exporter
+              containerPort: 8889
+              protocol: TCP
             - name: health
               containerPort: 13133
               protocol: TCP

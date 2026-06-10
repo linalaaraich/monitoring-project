@@ -147,6 +147,34 @@ data:
           exporter: false
           job: true
 
+      # O-2 (2026-06-10): expose the otel-demo (and any OTLP-pushing) app
+      # METRICS to Prometheus. Before this, the collector had only traces+logs
+      # pipelines, so the 22 demo services' OTLP metrics hit :4318 and were
+      # silently discarded — the bed was 2/3-signal and behavioral flagd
+      # faults could never fire a metric alert.
+      #
+      # Choice: `prometheus` PULL exporter on :8889 + a dedicated scrape job
+      # (`otel-demo-app-metrics` in roles/prometheus/templates/prometheus.yml.j2,
+      # routed through the k3s API-server pod proxy like every other in-cluster
+      # scrape) — NOT prometheusremotewrite, because the monitoring-VM
+      # Prometheus runs WITHOUT --web.enable-remote-write-receiver and flipping
+      # that flag means recreating the prometheus container (full stack
+      # restart), while a pull target also stays visible/auditable as
+      # `up{job="otel-demo-app-metrics"}`. Series carry job=<service.name> and
+      # instance=<service.instance.id> per the OTLP->Prometheus compat spec
+      # (the scrape job sets honor_labels: true so they survive relabeling).
+      #
+      # Cardinality (measured 2026-06-10 on the t3.large Prometheus): head
+      # series 28147 before enabling -> ~32.6k after first scrapes (~3.5k
+      # samples/scrape across all 22 services) — comfortably inside budget,
+      # so NO keep-list filter is applied (deliberate: full RED + runtime
+      # metrics are more valuable for RCA than the saved series). Revisit
+      # with a filter/keep processor if prometheus_tsdb_head_series ever
+      # approaches ~150k on this VM.
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        metric_expiration: 5m
+
       # Debug logging (disable in production)
       # debug:
       #   verbosity: detailed
@@ -172,3 +200,8 @@ data:
           receivers: [filelog, otlp]
           processors: [k8sattributes, resource, transform/service_name, attributes/loki-labels, batch]
           exporters: [loki]
+        # O-2: OTLP app metrics -> Prometheus (see prometheus exporter note).
+        metrics:
+          receivers: [otlp]
+          processors: [k8sattributes, resource, batch]
+          exporters: [prometheus]
