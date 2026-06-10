@@ -30,6 +30,18 @@ groups:
       # TODO 2026-06-09: revert to adaptive once new account has 7d baseline.
       # Same `or vector(N)` label-loss bug as MediumCpuUsage — see comment
       # on that rule. Using the historical fallback floor (1000ms) directly.
+      #
+      # O-4 (2026-06-10): DORMANT ON THE PoC BED — kept deliberately. On this
+      # bed spring-boot receives ONLY /actuator probe traffic (Prometheus
+      # self-scrape + kubelet probes), which the uri!~"/actuator.*" exclusion
+      # correctly strips, so refId A is permanently empty -> reduce(last) =
+      # NoData -> noDataState: OK -> rule sits inactive/health=ok and can
+      # never fire here. That is HONEST behavior (no false comfort, no noise):
+      # the rule is prod-relevant (prod = CIRES private cloud with real user
+      # traffic on the legacy app) and goes live the moment non-actuator
+      # traffic exists. Do NOT set noDataState: Alerting on this rule — no
+      # traffic is the bed's normal. Demo-bed latency coverage is provided by
+      # HighDemoFrontendP95Latency below (real load-generator traffic).
       - uid: high-p95-latency
         title: HighP95Latency
         condition: C
@@ -85,6 +97,16 @@ groups:
       # TODO 2026-06-09: revert to adaptive once new account has 7d baseline.
       # Same `or vector(N)` label-loss bug as MediumCpuUsage — see comment
       # on that rule. Using the historical fallback floor (1000ms) directly.
+      #
+      # O-4 (2026-06-10): DORMANT ON THE PoC BED — kept deliberately. Kong
+      # fronts only the legacy spring-boot /api route, which receives no
+      # traffic on this bed (the otel-demo load-generator drives the demo's
+      # own Envoy frontend-proxy, bypassing Kong). An all-zero-rate histogram
+      # makes histogram_quantile return NaN; NaN > 1000 is false, so the rule
+      # sits inactive/health=ok and can never fire here. HONEST + prod-
+      # relevant: it arms itself as soon as real /api traffic flows through
+      # Kong (prod = CIRES private cloud). Do NOT retire; do NOT alert on
+      # NoData/NaN — zero traffic is the bed's normal.
       - uid: high-kong-p95-latency
         title: HighKongP95Latency
         condition: C
@@ -133,6 +155,63 @@ groups:
           # after 2 LLM dismisses in a 2h window so a cascade of
           # "looks like a spike" dismisses can't silence a sustained
           # gateway-layer latency regression. See decisions-log D21.
+          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
+
+      # O-2/O-4 follow-through (2026-06-10): latency SLO that is actually LIVE
+      # on this bed. With the otel-demo metrics pipeline in place (O-2), the
+      # demo frontend exports http_server_duration_milliseconds via OTLP ->
+      # in-cluster collector :8889 prometheus exporter -> otel-demo-app-metrics
+      # scrape job. The load-generator drives continuous real traffic
+      # (~0.5 req/s, p95 ~40ms at rest), so unlike HighP95Latency /
+      # HighKongP95Latency above (dormant: no traffic on their paths), this
+      # rule evaluates real data 24/7 and a behavioral flagd latency fault
+      # can now fire a METRIC alert (was log/drain3-only before O-2).
+      # job=<service.name> is minted by the collector's prometheus exporter
+      # (honor_labels: true on the scrape job). Threshold mirrors the 1000ms
+      # static floor used by the other latency rules (same adaptive-revert
+      # TODO applies once a baseline accumulates).
+      - uid: high-demo-frontend-p95-latency
+        title: HighDemoFrontendP95Latency
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket{job="frontend"}[5m])) by (le))'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1000]
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: warning
+          service: frontend
+          signal: metric
+          component: api
+          timeframe: 10m
+        annotations:
+          expr: 'histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket{job="frontend"}[5m])) by (le))'
+          summary: "otel-demo frontend p95 latency above 1000ms"
+          description: "Astronomy Shop frontend p95 HTTP server latency has exceeded 1000ms for 2m (normal is ~40ms under load-generator traffic). Check flagd feature-flag faults, downstream gRPC services (checkout/cart/recommendation p95), and pod resource pressure in otel-demo."
           recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
 
       - uid: otel-collector-high-span-drop-rate
@@ -819,6 +898,74 @@ groups:
         annotations:
           summary: 'Workload {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.service {{ "}}" }} has fewer available than desired replicas'
           description: 'Deployment {{ "{{" }} $labels.service {{ "}}" }} in namespace {{ "{{" }} $labels.namespace {{ "}}" }} has had a desired-vs-available replica deficit for 3m (kube_deployment_spec_replicas - kube_deployment_status_replicas_available >= 1). Catches the cases KubeWorkloadDown misses: scaled-to-0-but-should-run, all-replicas-down, or available=0. Check: kubectl -n {{ "{{" }} $labels.namespace {{ "}}" }} get deploy {{ "{{" }} $labels.service {{ "}}" }} and pod events.'
+
+      # O-3 (2026-06-10): generic crash-loop / OOM-loop detector. Found via the
+      # accounting (otel-demo) pod: OOMKilled (exit 137, 120Mi limit) roughly
+      # every ~17-19 min, 420+ restarts — yet NO alert fired, because:
+      #   1) KubeWorkloadDown/ReplicasDeficit are duration-gated (for: 3m) and
+      #      a fast crash-loop restarts back to 1/1 Ready well under 3m;
+      #   2) PodHighMemory/CpuUsage are hard-scoped to namespace=~"app|rental".
+      # This rule keys on the RESTART RATE itself, namespace-generic (only
+      # kube-system excluded, mirroring KubeWorkloadDown).
+      #
+      # Window/threshold choice (deliberate): increase[1h] > 1, i.e. >=2
+      # restarts inside an hour. A 15m window misses slow-burn OOM loops —
+      # accounting restarts ~3x/h, so increase[15m] ~= 0.75 would never cross
+      # a >=2 threshold. A single benign restart (e.g. node blip, one-off
+      # probe kill) stays below it. Restart-rate chosen over a
+      # kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}
+      # rule because (a) it also catches non-OOM crash loops (panics,
+      # CrashLoopBackOff), and (b) last_terminated_reason stays ==1 long after
+      # recovery, so it needs a restart-rate join anyway to avoid a
+      # fires-forever alert. OOM specificity is delegated to triage via the
+      # runbook hint in the description.
+      #
+      # Same KSM label-clobber as KubeWorkloadDown: real ns/pod/container are
+      # in exported_*; the label_replace chain mints namespace/pod/service as
+      # REAL query labels (Grafana does not template the labels: block), so
+      # the triage pipeline gets a meaningful affected service (service =
+      # container name, which for the demo bed equals the app name).
+      - uid: pod-crash-looping
+        title: PodCrashLooping
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 'max by (namespace, pod, service) (label_replace(label_replace(label_replace(increase(kube_pod_container_status_restarts_total{exported_namespace!="kube-system"}[1h]), "namespace", "$1", "exported_namespace", "(.+)"), "pod", "$1", "exported_pod", "(.+)"), "service", "$1", "exported_container", "(.+)"))'
+              instant: false
+              range: true
+              intervalMs: 15000
+            relativeTimeRange:
+              from: 600
+              to: 0
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+          signal: availability
+          component: k8s
+          timeframe: 1h
+        annotations:
+          expr: 'max by (namespace, pod, service) (label_replace(label_replace(label_replace(increase(kube_pod_container_status_restarts_total{exported_namespace!="kube-system"}[1h]), "namespace", "$1", "exported_namespace", "(.+)"), "pod", "$1", "exported_pod", "(.+)"), "service", "$1", "exported_container", "(.+)"))'
+          summary: 'Container {{ "{{" }} $labels.namespace {{ "}}" }}/{{ "{{" }} $labels.service {{ "}}" }} is crash-looping ({{ "{{" }} $labels.pod {{ "}}" }})'
+          description: 'Container {{ "{{" }} $labels.service {{ "}}" }} in pod {{ "{{" }} $labels.pod {{ "}}" }} (namespace {{ "{{" }} $labels.namespace {{ "}}" }}) restarted more than once in the last hour and the loop has persisted 5m. Fast crash/OOM loops self-heal under KubeWorkloadDown''s 3m gate, so this restart-rate rule is the only catcher. Check: kube_pod_container_status_last_terminated_reason{exported_pod="{{ "{{" }} $labels.pod {{ "}}" }}"} == 1 for reason (OOMKilled => raise the container memory limit), and kubectl -n {{ "{{" }} $labels.namespace {{ "}}" }} describe pod {{ "{{" }} $labels.pod {{ "}}" }}.'
 
       # Pod-level memory pressure (added 2026-04-28 PM after chaos run 3
       # found 0/4 captures — the host-level HighMemoryUsage rule above
