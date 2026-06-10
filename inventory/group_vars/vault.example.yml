@@ -33,3 +33,9 @@ vault_grafana_admin_password: "CHANGE_ME_grafana_admin_password"
 # Password). Used by grafana_smtp_password. As a fallback the deploy also accepts
 # the controller env var GRAFANA_SMTP_PASSWORD, but the vault is preferred.
 vault_smtp_password: "CHANGE_ME_smtp_app_password"
+
+# MySQL app-user password for the LEGACY docker-compose application path
+# (legacy/application.yml → playbooks/templates/application-compose.yml.j2).
+# NOT used on the live estate (app runs in k3s via Helm + AWS RDS). Only
+# needed if you re-wire the legacy VM path or a BYO on-prem fallback.
+vault_mysql_password: "CHANGE_ME_mysql_app_password"

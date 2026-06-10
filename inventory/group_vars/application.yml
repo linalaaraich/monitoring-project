@@ -27,7 +27,13 @@ app_port: 8080
 # spring_datasource_url. The live app uses Helm values, but the IaC must match.
 mysql_database: "app_db"
 mysql_user: "appuser"
-mysql_password: "123456789"
+# A-1 (2026-06-10 audit): was a committed weak 9-digit literal. This var
+# is only consumed by the LEGACY docker-compose path (legacy/application.yml →
+# playbooks/templates/application-compose.yml.j2) — the live estate has no
+# `application` group (the app runs in k3s via Helm + AWS RDS). Vault-referenced
+# anyway so a re-wired legacy/BYO run can never ship a known-weak password:
+# supply vault_mysql_password via your vault (see group_vars/vault.example.yml).
+mysql_password: "{{ vault_mysql_password }}"
 
 # RDS connection URL — Spring Boot connects to AWS RDS instead of local MySQL
 spring_datasource_url: "jdbc:mysql://{{ rds_endpoint }}:{{ rds_port }}/{{ mysql_database }}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
