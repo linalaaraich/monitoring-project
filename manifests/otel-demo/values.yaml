@@ -53,6 +53,12 @@ components:
     resources:
       limits:
         memory: 256Mi
+  # 2026-06-11: expose the shop UI for demos (tailnet/VPC-internal only —
+  # the k3s SG keeps NodePorts closed to the internet).
+  frontend-proxy:
+    service:
+      type: NodePort
+      nodePort: 30808
 
 # Reuse the platform's single pipeline — disable everything bundled.
 opentelemetry-collector:
