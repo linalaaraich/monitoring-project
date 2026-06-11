@@ -91,7 +91,12 @@ groups:
           # post-LLM gate force-escalates after 2 dismisses in a 2h
           # window so a cascade can't silence a sustained real latency
           # regression. See decisions-log D21.
-          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
+          # recurrence_gate REMOVED 2026-06-11 (N6): pre_llm=4 ate the FIRST
+          # 4 fires of any fresh episode — but a SUSTAINED latency regression
+          # produces ONE Grafana notification, so a real episode was gated to
+          # silence until the repeat_interval. Latency SLO breaches are exactly
+          # what deserves a traced investigation; dedup + Layer-2 still absorb
+          # flapping. (X2 trace-decisive test unblocked by this.)
 
       # STATIC THRESHOLD — temporary regression from adaptive (2026-06-02).
       # TODO 2026-06-09: revert to adaptive once new account has 7d baseline.
@@ -155,7 +160,12 @@ groups:
           # after 2 LLM dismisses in a 2h window so a cascade of
           # "looks like a spike" dismisses can't silence a sustained
           # gateway-layer latency regression. See decisions-log D21.
-          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
+          # recurrence_gate REMOVED 2026-06-11 (N6): pre_llm=4 ate the FIRST
+          # 4 fires of any fresh episode — but a SUSTAINED latency regression
+          # produces ONE Grafana notification, so a real episode was gated to
+          # silence until the repeat_interval. Latency SLO breaches are exactly
+          # what deserves a traced investigation; dedup + Layer-2 still absorb
+          # flapping. (X2 trace-decisive test unblocked by this.)
 
       # O-2/O-4 follow-through (2026-06-10): latency SLO that is actually LIVE
       # on this bed. With the otel-demo metrics pipeline in place (O-2), the
@@ -212,7 +222,12 @@ groups:
           expr: 'histogram_quantile(0.95, sum(rate(http_server_duration_milliseconds_bucket{job="frontend"}[5m])) by (le))'
           summary: "otel-demo frontend p95 latency above 1000ms"
           description: "Astronomy Shop frontend p95 HTTP server latency has exceeded 1000ms for 2m (normal is ~40ms under load-generator traffic). Check flagd feature-flag faults, downstream gRPC services (checkout/cart/recommendation p95), and pod resource pressure in otel-demo."
-          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
+          # recurrence_gate REMOVED 2026-06-11 (N6): pre_llm=4 ate the FIRST
+          # 4 fires of any fresh episode — but a SUSTAINED latency regression
+          # produces ONE Grafana notification, so a real episode was gated to
+          # silence until the repeat_interval. Latency SLO breaches are exactly
+          # what deserves a traced investigation; dedup + Layer-2 still absorb
+          # flapping. (X2 trace-decisive test unblocked by this.)
 
       - uid: otel-collector-high-span-drop-rate
         title: OTelCollectorHighSpanDropRate
@@ -678,7 +693,12 @@ groups:
           summary: "Medium memory usage"
           description: "Memory usage is above 80% for 1 minute."
           # US-5.8 recurrence-gate opt-in (warning-severity, see D21).
-          recurrence_gate: "pre_llm=4,llm_dismiss=2,window=2h"
+          # recurrence_gate REMOVED 2026-06-11 (N6): pre_llm=4 ate the FIRST
+          # 4 fires of any fresh episode — but a SUSTAINED latency regression
+          # produces ONE Grafana notification, so a real episode was gated to
+          # silence until the repeat_interval. Latency SLO breaches are exactly
+          # what deserves a traced investigation; dedup + Layer-2 still absorb
+          # flapping. (X2 trace-decisive test unblocked by this.)
 
       - uid: target-down
         title: TargetDown
