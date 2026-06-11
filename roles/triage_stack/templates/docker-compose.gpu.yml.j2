@@ -78,6 +78,7 @@ services:
       JAEGER_MCP_URL: "http://jaeger-mcp:8093"
       DRAIN3_MCP_URL: "http://drain3-mcp:8094"
       RCA_HISTORY_MCP_URL: "http://rca-history-mcp:8095"
+      DEPLOY_MCP_URL: "http://deploy-mcp:8096"
 
       # --- Direct Loki for Drain3 background ingestion (bulk path) ---
       LOKI_API_URL: "http://{{ triage_monitoring_host }}:{{ loki_port | default(3100) }}"
@@ -183,6 +184,28 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8093/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # MCP: Deploy (fix F, 2026-06-11). Stateless. Derives deploy/rollout events
+  # from kube-state-metrics series already in Prometheus
+  # (kube_replicaset_created + kube_replicaset_owner) — same upstream as
+  # prometheus-mcp, no extra cluster access. Grounds "a recent deploy caused
+  # this" claims; an empty answer rules deploy-regression out.
+  # ---------------------------------------------------------------------------
+  deploy-mcp:
+    image: "${MCP_DEPLOY_IMAGE:-ghcr.io/linalaaraich/mcp-deploy:${IMAGE_TAG:-main}}"
+    container_name: ai-mcp-deploy
+    hostname: deploy-mcp
+    networks: [ai-stack]
+    environment:
+      PROMETHEUS_URL: "http://{{ triage_monitoring_host }}:{{ prometheus_port | default(9090) }}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8096/health"]
       interval: 15s
       timeout: 5s
       retries: 3
