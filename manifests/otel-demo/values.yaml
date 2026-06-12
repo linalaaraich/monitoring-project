@@ -19,10 +19,12 @@
 # logs flowing to Loki where Drain3 ingests them (the bed for S5-DRN-01's
 # 3-tier component->app->system thresholds).
 #
-# NOTE (metrics gap, follow-up): the existing in-cluster collector has a
-# traces + logs pipeline but no metrics->Prometheus forwarding path, so demo
-# OTLP *metrics* are currently dropped. Traces + logs (what Drain3 + the 3-tier
-# work need) flow fully. Adding a metrics pipeline is tracked as a follow-up.
+# NOTE (metrics, resolved 2026-06-10 / O-2): the in-cluster collector now has
+# an OTLP metrics pipeline (prometheus pull exporter :8889 scraped via the
+# API-server proxy `otel-demo-app-metrics` job, honor_labels) — demo metrics
+# land in Prometheus with job=<service.name>. The bed is 3/3-signal: traces +
+# logs + metrics all flow. (This header previously claimed metrics were
+# dropped; corrected 2026-06-12 per the architecture deep-dive drift check.)
 # =============================================================================
 
 # default.env is a LIST — helm REPLACES it wholesale, so we restate the chart's
